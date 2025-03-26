@@ -1,31 +1,103 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>BLOOM</title>
+    <title>BLOOM - Middlesex University</title>
     <link rel="stylesheet" href="popup.css" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   </head>
   <body>
     <div class="container">
       <div class="header">
-        <h1>BLOOM</h1>
-        <button id="upload-btn">Upload Document</button>
-        <input
-          type="file"
-          id="file-input"
-          accept=".pdf,.docx"
-          style="display: none"
-        />
-      </div>
-
-      <div class="chat-container">
-        <div id="chat-messages"></div>
-        <div class="input-area">
-          <input type="text" id="user-input" placeholder="Ask a question..." />
-          <button id="send-btn">Send</button>
+        <div class="logo-container">
+          <h1 class="logo-text">BLOOM</h1>
+          <span class="logo-subtitle">Middlesex University Assistant</span>
         </div>
       </div>
 
-      <div id="status"></div>
+      <div class="main-content">
+        <!-- Welcome screen (shown on first run) -->
+        <div id="welcome-screen" class="welcome-screen">
+          <div class="welcome-icon">📚</div>
+          <h2>Welcome to BLOOM</h2>
+          <p>Your intelligent assistant for Middlesex University courses.</p>
+          <p>
+            Upload your course documents and get instant answers to your
+            questions.
+          </p>
+
+          <div class="features">
+            <div class="feature">
+              <div class="feature-icon">📁</div>
+              <div class="feature-text">Upload multiple documents at once</div>
+            </div>
+            <div class="feature">
+              <div class="feature-icon">💬</div>
+              <div class="feature-text">
+                Ask questions about your course material
+              </div>
+            </div>
+            <div class="feature">
+              <div class="feature-icon">🔍</div>
+              <div class="feature-text">Find information instantly with AI</div>
+            </div>
+          </div>
+
+          <button id="get-started-btn" class="bloom-btn">Get Started</button>
+        </div>
+
+        <!-- Upload screen -->
+        <div id="upload-screen" class="upload-screen hidden">
+          <h2>Upload Documents</h2>
+          <p>Select course materials to upload for analysis</p>
+
+          <div class="upload-area" id="drop-area">
+            <div class="upload-icon">📄</div>
+            <p>Drag files here or</p>
+            <button id="select-files-btn" class="bloom-btn">
+              Select Files
+            </button>
+            <input
+              type="file"
+              id="file-input"
+              accept=".pdf,.docx"
+              multiple
+              style="display: none"
+            />
+            <p class="upload-note">Supports PDF and Word documents</p>
+          </div>
+
+          <div id="file-list" class="file-list"></div>
+
+          <div class="upload-actions">
+            <button id="upload-all-btn" class="bloom-btn" disabled>
+              Upload All
+            </button>
+            <button id="open-chat-btn" class="bloom-btn bloom-secondary-btn">
+              Open Chat Panel
+            </button>
+          </div>
+        </div>
+
+        <!-- Processing screen -->
+        <div id="processing-screen" class="processing-screen hidden">
+          <div class="processing-animation">
+            <div class="spinner"></div>
+          </div>
+          <h2>Processing Documents</h2>
+          <p id="processing-status">Analyzing your documents...</p>
+          <div id="processing-progress" class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div id="status" class="status"></div>
+        <button id="open-panel-btn" class="bloom-btn bloom-small-btn">
+          Open Side Panel
+        </button>
+      </div>
     </div>
     <script src="popup.js"></script>
   </body>

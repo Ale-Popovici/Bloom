@@ -4,56 +4,112 @@ from fastapi import UploadFile
 import fitz  # PyMuPDF
 import docx
 import tempfile
+import logging
+from typing import Dict, Any
 
 from services.vector_store import get_vector_db
 from utils.text_splitter import split_text
-from services.embedding_service import get_embeddings
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Track processing status
+processing_status = {}
 
 
-async def process_document(file: UploadFile):
+async def process_document(file: UploadFile) -> str:
+    """
+    Process a document and add it to the vector store.
+    This is a simplified version that doesn't use a background queue.
+
+    Args:
+        file (UploadFile): The uploaded file
+
+    Returns:
+        str: The document ID
+    """
     # Generate unique ID for the document
     document_id = str(uuid.uuid4())
 
-    # Extract text based on file type
-    if file.filename.lower().endswith('.pdf'):
-        text = await extract_text_from_pdf(file)
-    elif file.filename.lower().endswith('.docx'):
-        text = await extract_text_from_docx(file)
-    else:
-        raise ValueError("Unsupported file format")
+    # Update processing status
+    processing_status[document_id] = {
+        "filename": file.filename,
+        "status": "processing",
+        "progress": 0
+    }
 
-    # Split text into chunks
-    chunks = split_text(text)
+    try:
+        # Extract text based on file type
+        if file.filename.lower().endswith('.pdf'):
+            text = await extract_text_from_pdf(file)
+        elif file.filename.lower().endswith('.docx'):
+            text = await extract_text_from_docx(file)
+        else:
+            raise ValueError("Unsupported file format")
 
-    # Get vector DB
-    db = get_vector_db()
+        # Update progress
+        processing_status[document_id]["progress"] = 30
 
-    # Prepare data for Chroma DB
-    ids = []
-    texts = []
-    metadatas = []
+        # Split text into chunks
+        chunks = split_text(text)
 
-    for i, chunk in enumerate(chunks):
-        chunk_id = f"{document_id}_{i}"
-        ids.append(chunk_id)
-        texts.append(chunk)
-        metadatas.append({
-            "document_id": document_id,
-            "filename": file.filename,
-            "chunk_index": i
-        })
+        # Update progress
+        processing_status[document_id]["progress"] = 50
 
-    # Add documents to ChromaDB using the correct method
-    db.add(
-        ids=ids,
-        documents=texts,
-        metadatas=metadatas
-    )
+        # Get vector DB
+        db = get_vector_db()
 
-    return document_id
+        # Prepare data for Chroma DB
+        ids = []
+        texts = []
+        metadatas = []
+
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{document_id}_{i}"
+            ids.append(chunk_id)
+            texts.append(chunk)
+            metadatas.append({
+                "document_id": document_id,
+                "filename": file.filename,
+                "chunk_index": i,
+                "total_chunks": len(chunks)
+            })
+
+        # Update progress
+        processing_status[document_id]["progress"] = 70
+
+        # Add documents to ChromaDB
+        db.add(
+            ids=ids,
+            documents=texts,
+            metadatas=metadatas
+        )
+
+        # Update status to complete
+        processing_status[document_id]["status"] = "complete"
+        processing_status[document_id]["progress"] = 100
+
+        return document_id
+
+    except Exception as e:
+        # Update status to failed
+        processing_status[document_id]["status"] = "failed"
+        processing_status[document_id]["error"] = str(e)
+        logger.error(f"Error processing document {file.filename}: {str(e)}")
+        raise e
 
 
-async def extract_text_from_pdf(file: UploadFile):
+async def extract_text_from_pdf(file: UploadFile) -> str:
+    """
+    Extract text from a PDF file
+
+    Args:
+        file (UploadFile): The PDF file
+
+    Returns:
+        str: Extracted text
+    """
     # Save upload to temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
         temp_file.write(await file.read())
@@ -62,16 +118,49 @@ async def extract_text_from_pdf(file: UploadFile):
     try:
         # Extract text using PyMuPDF
         doc = fitz.open(temp_path)
-        text = ""
-        for page in doc:
-            text += page.get_text()
-        return text
+
+        # More comprehensive extraction with metadata
+        text_parts = []
+
+        # Add document metadata if available
+        metadata = doc.metadata
+        if metadata:
+            meta_text = "Document Metadata:\n"
+            for key, value in metadata.items():
+                if value:
+                    meta_text += f"{key}: {value}\n"
+            text_parts.append(meta_text)
+
+        # Extract text from each page with page numbers
+        for i, page in enumerate(doc):
+            page_text = page.get_text()
+            if page_text.strip():
+                text_parts.append(f"Page {i+1}:\n{page_text}")
+
+        # Extract table of contents if available
+        toc = doc.get_toc()
+        if toc:
+            toc_text = "Table of Contents:\n"
+            for level, title, page in toc:
+                toc_text += f"{'  ' * (level-1)}- {title} (Page {page})\n"
+            text_parts.append(toc_text)
+
+        return "\n\n".join(text_parts)
     finally:
         # Clean up temp file
         os.unlink(temp_path)
 
 
-async def extract_text_from_docx(file: UploadFile):
+async def extract_text_from_docx(file: UploadFile) -> str:
+    """
+    Extract text from a DOCX file
+
+    Args:
+        file (UploadFile): The DOCX file
+
+    Returns:
+        str: Extracted text
+    """
     # Save upload to temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
         temp_file.write(await file.read())
@@ -80,10 +169,74 @@ async def extract_text_from_docx(file: UploadFile):
     try:
         # Extract text using python-docx
         doc = docx.Document(temp_path)
-        text = ""
+
+        # Extract document properties
+        core_properties = doc.core_properties
+        text_parts = []
+
+        # Add document metadata if available
+        if core_properties:
+            meta_text = "Document Metadata:\n"
+            if core_properties.title:
+                meta_text += f"Title: {core_properties.title}\n"
+            if core_properties.author:
+                meta_text += f"Author: {core_properties.author}\n"
+            if core_properties.created:
+                meta_text += f"Created: {core_properties.created}\n"
+            if core_properties.modified:
+                meta_text += f"Modified: {core_properties.modified}\n"
+            if core_properties.subject:
+                meta_text += f"Subject: {core_properties.subject}\n"
+            if core_properties.keywords:
+                meta_text += f"Keywords: {core_properties.keywords}\n"
+
+            text_parts.append(meta_text)
+
+        # Extract headings and paragraphs with structure
+        current_heading = "Document Content"
+        paragraphs_text = []
+
         for para in doc.paragraphs:
-            text += para.text + "\n"
-        return text
+            if para.style.name.startswith('Heading'):
+                if paragraphs_text:
+                    text_parts.append(
+                        f"{current_heading}:\n" + "\n".join(paragraphs_text))
+                    paragraphs_text = []
+                current_heading = para.text
+            elif para.text.strip():
+                paragraphs_text.append(para.text)
+
+        # Add the last section
+        if paragraphs_text:
+            text_parts.append(f"{current_heading}:\n" +
+                              "\n".join(paragraphs_text))
+
+        # Extract tables
+        for i, table in enumerate(doc.tables):
+            table_text = f"Table {i+1}:\n"
+            for row in table.rows:
+                row_text = []
+                for cell in row.cells:
+                    row_text.append(cell.text.strip())
+                table_text += " | ".join(row_text) + "\n"
+            text_parts.append(table_text)
+
+        return "\n\n".join(text_parts)
     finally:
         # Clean up temp file
         os.unlink(temp_path)
+
+
+def get_processing_status(document_id: str) -> Dict[str, Any]:
+    """
+    Get the processing status for a document
+
+    Args:
+        document_id (str): The document ID
+
+    Returns:
+        Dict: Status information
+    """
+    if document_id in processing_status:
+        return processing_status[document_id]
+    return {"status": "not_found"}
