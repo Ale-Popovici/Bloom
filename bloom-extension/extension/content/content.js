@@ -1,39 +1,322 @@
 // BLOOM - Document Assistant for Middlesex University
-// Content script for injecting the integrated side panel
+// Content script with completely independent side panel
 
-let sidePanel = null;
+let panelFrame = null;
 let isPanelOpen = false;
 const API_URL = "http://localhost:8000";
 let sessionId = generateSessionId();
-let chatHistory = [];
+const PANEL_WIDTH = 350; // Width of the panel in pixels
 
 // Generate a unique session ID for conversation tracking
 function generateSessionId() {
   return "bloom_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
 }
 
-// Create and inject the side panel into the current page
-function createSidePanel() {
-  // Create the panel container - but NOT inside the page wrapper
-  // This keeps it completely separate from page content
-  sidePanel = document.createElement("div");
-  sidePanel.id = "bloom-side-panel";
-  sidePanel.classList.add("bloom-panel-closed");
+// Create the BLOOM frame
+function createPanel() {
+  // Check if panel already exists
+  if (document.getElementById("bloom-panel-frame")) {
+    return;
+  }
 
-  // Create panel HTML structure
-  sidePanel.innerHTML = `
+  // Create the iframe
+  panelFrame = document.createElement("iframe");
+  panelFrame.id = "bloom-panel-frame";
+  panelFrame.className = "bloom-panel-frame bloom-panel-closed";
+
+  // Set frame styles
+  panelFrame.style.position = "fixed";
+  panelFrame.style.top = "0";
+  panelFrame.style.right = "0";
+  panelFrame.style.width = PANEL_WIDTH + "px";
+  panelFrame.style.height = "100vh";
+  panelFrame.style.border = "none";
+  panelFrame.style.boxShadow = "-2px 0 10px rgba(0, 0, 0, 0.1)";
+  panelFrame.style.zIndex = "2147483647"; // Maximum z-index
+  panelFrame.style.transform = "translateX(100%)";
+  panelFrame.style.transition = "transform 0.3s ease";
+  panelFrame.style.backgroundColor = "white";
+
+  // Add to body
+  document.body.appendChild(panelFrame);
+
+  // Wait for iframe to load then inject content
+  panelFrame.addEventListener("load", setupFrameContent);
+
+  // Set empty initial content to trigger load event
+  panelFrame.srcdoc = "<!DOCTYPE html><html><body></body></html>";
+
+  // Setup keyboard shortcut
+  document.addEventListener("keydown", handleKeyboardShortcut);
+
+  // Show keyboard shortcut hint
+  showShortcutHint();
+}
+
+// Handle keyboard shortcut
+function handleKeyboardShortcut(e) {
+  if (e.ctrlKey && e.shiftKey && e.key === "B") {
+    togglePanel();
+    e.preventDefault();
+  }
+}
+
+// Show keyboard shortcut hint
+function showShortcutHint() {
+  const hint = document.createElement("div");
+  hint.style.position = "fixed";
+  hint.style.bottom = "20px";
+  hint.style.right = "20px";
+  hint.style.backgroundColor = "#2D2A4A";
+  hint.style.color = "white";
+  hint.style.padding = "10px 15px";
+  hint.style.borderRadius = "5px";
+  hint.style.fontSize = "14px";
+  hint.style.boxShadow = "0 2px 10px rgba(0,0,0,0.2)";
+  hint.style.zIndex = "2147483646";
+  hint.style.animation = "fadeOut 5s forwards";
+  hint.style.pointerEvents = "none";
+  hint.textContent = "Press Ctrl+Shift+B to open BLOOM assistant";
+
+  // Add style for animation
+  const style = document.createElement("style");
+  style.textContent = `
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      70% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  // Add hint to DOM
+  document.body.appendChild(hint);
+
+  // Remove after animation completes
+  setTimeout(() => {
+    if (hint.parentNode) {
+      hint.parentNode.removeChild(hint);
+    }
+  }, 5000);
+}
+
+// Setup the content inside the iframe
+function setupFrameContent() {
+  // Get the iframe document
+  const frameDoc =
+    panelFrame.contentDocument || panelFrame.contentWindow.document;
+
+  // Create panel HTML content
+  const mdxPurple = "#2D2A4A"; // Default purple if unable to extract from page
+  const mdxRed = "#D42E24"; // Middlesex University red
+
+  // Add styles to the iframe
+  frameDoc.head.innerHTML = `
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      
+      .bloom-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 15px;
+        background-color: ${mdxPurple};
+        color: white;
+        height: 79px;
+      }
+      
+      .bloom-logo-container {
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .bloom-logo-text {
+        font-size: 20px;
+        font-weight: bold;
+        color: white;
+      }
+      
+      .bloom-logo-subtitle {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+      
+      .bloom-close-btn {
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+      }
+      
+      .bloom-panel-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      
+      .bloom-messages-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 15px;
+        background-color: #f9f9f9;
+      }
+      
+      .bloom-message {
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 10px;
+        max-width: 85%;
+        word-wrap: break-word;
+      }
+      
+      .bloom-user-message {
+        background-color: rgba(212, 46, 36, 0.1);
+        align-self: flex-end;
+        margin-left: auto;
+        border-left: 3px solid ${mdxRed};
+      }
+      
+      .bloom-bot-message {
+        background-color: rgba(45, 42, 74, 0.1);
+        align-self: flex-start;
+        border-left: 3px solid ${mdxPurple};
+      }
+      
+      .bloom-upload-area {
+        padding: 10px 15px;
+        border-top: 1px solid #eee;
+      }
+      
+      .bloom-doc-list {
+        max-height: 100px;
+        overflow-y: auto;
+        margin-bottom: 10px;
+      }
+      
+      .bloom-doc-item {
+        font-size: 12px;
+        padding: 5px;
+        background-color: #f1f1f1;
+        border-radius: 3px;
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+      }
+      
+      .bloom-input-area {
+        display: flex;
+        padding: 15px;
+        border-top: 1px solid #eee;
+      }
+      
+      .bloom-input {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        outline: none;
+      }
+      
+      .bloom-input:focus {
+        border-color: ${mdxRed};
+      }
+      
+      .bloom-btn {
+        background-color: ${mdxRed};
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 20px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.2s;
+      }
+      
+      .bloom-btn:hover {
+        background-color: #b02520;
+      }
+      
+      .bloom-upload-btn {
+        width: 100%;
+        margin-top: 5px;
+      }
+      
+      .bloom-send-btn {
+        margin-left: 10px;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+      }
+      
+      .bloom-btn-icon {
+        font-size: 18px;
+      }
+      
+      /* Thinking animation */
+      .bloom-thinking {
+        display: flex;
+        align-items: center;
+      }
+
+      .bloom-ellipsis span {
+        opacity: 0;
+        animation: bloomDot 1.4s infinite;
+        margin-left: 2px;
+      }
+
+      .bloom-ellipsis span:nth-child(1) {
+        animation-delay: 0s;
+      }
+
+      .bloom-ellipsis span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+
+      .bloom-ellipsis span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes bloomDot {
+        0%, 60%, 100% { opacity: 0; }
+        30% { opacity: 1; }
+      }
+    </style>
+  `;
+
+  // Add HTML content
+  frameDoc.body.innerHTML = `
     <div class="bloom-panel-header">
       <div class="bloom-logo-container">
         <span class="bloom-logo-text">BLOOM</span>
         <span class="bloom-logo-subtitle">Middlesex University</span>
       </div>
-      <button id="bloom-toggle-panel" class="bloom-toggle-btn">
-        <span class="bloom-toggle-icon">›</span>
-      </button>
+      <button id="bloom-close-panel" class="bloom-close-btn" title="Close Panel (Ctrl+Shift+B)">×</button>
     </div>
     
     <div class="bloom-panel-content">
-      <div id="bloom-chat-messages" class="bloom-messages-container"></div>
+      <div id="bloom-chat-messages" class="bloom-messages-container">
+        <div class="bloom-message bloom-bot-message">
+          Hello! I'm BLOOM, your document assistant for Middlesex University. Upload course materials, and I'll help you find information quickly.
+        </div>
+      </div>
       
       <div class="bloom-upload-area">
         <div id="bloom-doc-list" class="bloom-doc-list"></div>
@@ -51,458 +334,85 @@ function createSidePanel() {
     </div>
   `;
 
-  // Create a wrapper for page content - this allows us to shift content
-  createPageWrapper();
+  // Setup event handlers in the iframe
+  frameDoc.getElementById("bloom-close-panel").addEventListener("click", () => {
+    window.parent.postMessage({ action: "togglePanel" }, "*");
+  });
 
-  // Add panel DIRECTLY to body, not inside the page wrapper
-  // This ensures it remains completely separate
-  document.body.appendChild(sidePanel);
+  frameDoc.getElementById("bloom-upload-btn").addEventListener("click", () => {
+    window.parent.postMessage({ action: "openFilePicker" }, "*");
+  });
 
-  // Load and inject styles
-  injectStyles();
+  frameDoc.getElementById("bloom-send-btn").addEventListener("click", () => {
+    const input = frameDoc.getElementById("bloom-user-input");
+    const message = input.value.trim();
+    if (message) {
+      window.parent.postMessage(
+        { action: "sendMessage", message: message },
+        "*"
+      );
+      input.value = "";
+    }
+  });
 
-  // Add event listeners
-  setupEventListeners();
+  frameDoc
+    .getElementById("bloom-user-input")
+    .addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        const input = frameDoc.getElementById("bloom-user-input");
+        const message = input.value.trim();
+        if (message) {
+          window.parent.postMessage(
+            { action: "sendMessage", message: message },
+            "*"
+          );
+          input.value = "";
+        }
+      }
+    });
+
+  // Setup message event listener in the parent window
+  window.addEventListener("message", handleIframeMessage);
 
   // Load chat history from storage
   loadChatHistory();
-
-  // Send welcome message if no history exists
-  if (chatHistory.length === 0) {
-    addBotMessage(
-      "Hello! I'm BLOOM, your document assistant for Middlesex University. Upload course materials, and I'll help you find information quickly."
-    );
-  }
 }
 
-// Create a wrapper around the entire page content
-function createPageWrapper() {
-  // Check if wrapper already exists
-  if (document.getElementById("bloom-page-wrapper")) {
+// Toggle panel visibility
+function togglePanel() {
+  if (!panelFrame) {
+    createPanel();
+    setTimeout(() => togglePanel(), 100);
     return;
   }
 
-  // Create wrapper element
-  const wrapper = document.createElement("div");
-  wrapper.id = "bloom-page-wrapper";
-  wrapper.className = "bloom-page-wrapper";
-
-  // Create content container
-  const contentContainer = document.createElement("div");
-  contentContainer.id = "bloom-content-container";
-  contentContainer.className = "bloom-content-container";
-
-  // Move all body children to the content container
-  while (document.body.firstChild) {
-    contentContainer.appendChild(document.body.firstChild);
-  }
-
-  // Add content container to wrapper
-  wrapper.appendChild(contentContainer);
-
-  // Add wrapper to body
-  document.body.appendChild(wrapper);
-
-  // Create toggle button outside the panel
-  const toggleButton = document.createElement("button");
-  toggleButton.id = "bloom-floating-toggle";
-  toggleButton.className = "bloom-floating-toggle bloom-btn";
-  toggleButton.innerHTML = `
-    <span>B</span>
-    <span class="bloom-tooltip">Open BLOOM Assistant</span>
-  `;
-  document.body.appendChild(toggleButton);
-
-  // Add click event to toggle button
-  toggleButton.addEventListener("click", togglePanel);
-}
-
-// Inject the required styles for the side panel
-function injectStyles() {
-  // Extract Middlesex purple color from the university header
-  const mdxPurple = getMiddlesexPurpleColor() || "#2D2A4A"; // Fallback color
-
-  const style = document.createElement("style");
-  style.textContent = `
-    /* Middlesex University styling */
-    :root {
-      --mdx-red: #D42E24;
-      --mdx-red-light: #f9d7d5;
-      --mdx-red-dark: #b02520;
-      --mdx-purple: ${mdxPurple};
-      --mdx-purple-light: #e9ddff;
-      --text-dark: #333333;
-      --text-light: #ffffff;
-      --bg-light: #ffffff;
-      --bg-grey: #f5f5f5;
-      --border-color: #e0e0e0;
-    }
-    
-    /* Reset body styles to enable our layout */
-    body {
-      margin: 0 !important;
-      padding: 0 !important;
-      overflow-x: hidden !important;
-    }
-    
-    /* Page wrapper layout */
-    .bloom-page-wrapper {
-      width: 100%;
-      min-height: 100vh;
-      position: relative;
-      transition: all 0.3s ease;
-    }
-    
-    /* Main content container */
-    .bloom-content-container {
-      transition: width 0.3s ease, margin-right 0.3s ease;
-      width: 100%;
-    }
-    
-    /* When panel is open */
-    body.bloom-panel-open .bloom-content-container {
-      width: calc(100% - 350px);
-      margin-right: 350px;
-    }
-    
-    /* Side panel - completely separate with own scrolling */
-    #bloom-side-panel {
-      position: fixed;
-      top: 0;
-      right: 0;
-      width: 350px;
-      height: 100vh;
-      background-color: white;
-      box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
-      z-index: 10000;
-      display: flex;
-      flex-direction: column;
-      transition: transform 0.3s ease;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      overflow: hidden; /* Prevent overflow */
-    }
-    
-    .bloom-panel-closed {
-      transform: translateX(350px);
-    }
-    
-    .bloom-panel-open {
-      transform: translateX(0);
-    }
-    
-    /* Match the Middlesex header style but double the height */
-    .bloom-panel-header {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding: 0 15px;
-      background-color: var(--mdx-purple); /* Middlesex University purple */
-      color: white;
-      height: 79px; 
-    }
-    
-    .bloom-logo-container {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-    
-    .bloom-logo-text {
-      font-size: 26px; /* Increased font size */
-      font-weight: bold;
-      color: white; /* White text instead of purple */
-      letter-spacing: 1px;
-    }
-    
-    .bloom-logo-subtitle {
-      font-size: 14px; /* Increased font size */
-      opacity: 0.9;
-      color: white;
-      margin-top: 5px;
-    }
-    
-    .bloom-toggle-btn {
-      background: transparent;
-      border: none;
-      color: white;
-      font-size: 20px;
-      cursor: pointer;
-      width: 30px;
-      height: 30px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      border-radius: 50%;
-      position: absolute;
-      left: -40px;
-      top: 25px; /* Center vertically in larger header */
-      background-color: var(--mdx-purple);
-      box-shadow: -3px 0 5px rgba(0, 0, 0, 0.1);
-    }
-    
-    .bloom-toggle-icon {
-      transform: rotate(180deg);
-      display: inline-block;
-    }
-    
-    /* Panel content - with its own scrolling */
-    .bloom-panel-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden; /* Important - ensures separate scrolling */
-    }
-    
-    .bloom-messages-container {
-      flex: 1;
-      overflow-y: auto; /* Independent scrolling */
-      padding: 15px;
-      background-color: #f9f9f9;
-    }
-    
-    .bloom-message {
-      margin-bottom: 10px;
-      padding: 10px;
-      border-radius: 10px;
-      max-width: 85%;
-      word-wrap: break-word;
-    }
-    
-    .bloom-user-message {
-      background-color: rgba(212, 46, 36, 0.1);
-      align-self: flex-end;
-      margin-left: auto;
-      border-left: 3px solid var(--mdx-red);
-    }
-    
-    .bloom-bot-message {
-      background-color: rgba(45, 42, 74, 0.1);
-      align-self: flex-start;
-      border-left: 3px solid var(--mdx-purple);
-    }
-    
-    .bloom-upload-area {
-      padding: 10px 15px;
-      border-top: 1px solid #eee;
-    }
-    
-    .bloom-doc-list {
-      max-height: 100px;
-      overflow-y: auto;
-      margin-bottom: 10px;
-    }
-    
-    .bloom-doc-item {
-      font-size: 12px;
-      padding: 5px;
-      background-color: #f1f1f1;
-      border-radius: 3px;
-      margin-bottom: 5px;
-      display: flex;
-      justify-content: space-between;
-    }
-    
-    .bloom-input-area {
-      display: flex;
-      padding: 15px;
-      border-top: 1px solid #eee;
-    }
-    
-    .bloom-input {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 20px;
-      outline: none;
-    }
-    
-    .bloom-input:focus {
-      border-color: var(--mdx-red);
-    }
-    
-    .bloom-btn {
-      background-color: var(--mdx-red);
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 20px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background-color 0.2s;
-    }
-    
-    .bloom-btn:hover {
-      background-color: var(--mdx-red-dark);
-    }
-    
-    .bloom-upload-btn {
-      width: 100%;
-      margin-top: 5px;
-    }
-    
-    .bloom-send-btn {
-      margin-left: 10px;
-      width: 40px;
-      height: 40px;
-      padding: 0;
-    }
-    
-    .bloom-btn-icon {
-      font-size: 18px;
-    }
-    
-    /* Floating toggle button */
-    .bloom-floating-toggle {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      background-color: var(--mdx-red);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-      z-index: 9999;
-      transition: all 0.2s ease;
-    }
-    
-    .bloom-floating-toggle:hover {
-      background-color: var(--mdx-red-dark);
-      transform: scale(1.05);
-    }
-    
-    .bloom-tooltip {
-      position: absolute;
-      right: 60px;
-      background-color: #333;
-      color: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 12px;
-      white-space: nowrap;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.2s ease;
-    }
-    
-    .bloom-floating-toggle:hover .bloom-tooltip {
-      opacity: 1;
-      visibility: visible;
-    }
-    
-    /* Hide the floating toggle when panel is open */
-    body.bloom-panel-open .bloom-floating-toggle {
-      opacity: 0;
-      visibility: hidden;
-    }
-
-    /* Thinking animation */
-    .bloom-thinking {
-      display: flex;
-      align-items: center;
-    }
-
-    .bloom-ellipsis span {
-      opacity: 0;
-      animation: bloomDot 1.4s infinite;
-      margin-left: 2px;
-    }
-
-    .bloom-ellipsis span:nth-child(1) {
-      animation-delay: 0s;
-    }
-
-    .bloom-ellipsis span:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .bloom-ellipsis span:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-
-    @keyframes bloomDot {
-      0%, 60%, 100% { opacity: 0; }
-      30% { opacity: 1; }
-    }
-  `;
-
-  document.head.appendChild(style);
-}
-
-// Try to extract the Middlesex purple color from the university header
-function getMiddlesexPurpleColor() {
-  try {
-    // Look for the Middlesex header
-    const mdxHeader = document.querySelector(
-      "header, #header, .header, nav, .nav, .navbar"
-    );
-    if (mdxHeader) {
-      const computedStyle = window.getComputedStyle(mdxHeader);
-      return computedStyle.backgroundColor || "#2D2A4A";
-    }
-    return null;
-  } catch (e) {
-    console.error("Error getting Middlesex color:", e);
-    return null;
-  }
-}
-
-// Set up event listeners for the panel
-function setupEventListeners() {
-  // Toggle panel visibility
-  document
-    .getElementById("bloom-toggle-panel")
-    .addEventListener("click", togglePanel);
-
-  // Open file picker when upload button is clicked
-  document
-    .getElementById("bloom-upload-btn")
-    .addEventListener("click", openFilePicker);
-
-  // Send message when button is clicked or Enter is pressed
-  document
-    .getElementById("bloom-send-btn")
-    .addEventListener("click", sendMessage);
-  document
-    .getElementById("bloom-user-input")
-    .addEventListener("keypress", (e) => {
-      if (e.key === "Enter") sendMessage();
-    });
-}
-
-// Toggle the side panel visibility
-function togglePanel() {
   isPanelOpen = !isPanelOpen;
 
   if (isPanelOpen) {
-    // Open the panel
-    sidePanel.classList.remove("bloom-panel-closed");
-    sidePanel.classList.add("bloom-panel-open");
-    document.body.classList.add("bloom-panel-open");
-    document
-      .getElementById("bloom-toggle-panel")
-      .querySelector(".bloom-toggle-icon").style.transform = "rotate(0deg)";
+    panelFrame.classList.remove("bloom-panel-closed");
+    panelFrame.classList.add("bloom-panel-open");
+    panelFrame.style.transform = "translateX(0)";
   } else {
-    // Close the panel
-    sidePanel.classList.remove("bloom-panel-open");
-    sidePanel.classList.add("bloom-panel-closed");
-    document.body.classList.remove("bloom-panel-open");
-    document
-      .getElementById("bloom-toggle-panel")
-      .querySelector(".bloom-toggle-icon").style.transform = "rotate(180deg)";
+    panelFrame.classList.remove("bloom-panel-open");
+    panelFrame.classList.add("bloom-panel-closed");
+    panelFrame.style.transform = "translateX(100%)";
   }
 
   // Store panel state
   chrome.storage.local.set({ isPanelOpen: isPanelOpen });
+}
+
+// Handle messages from iframe
+function handleIframeMessage(event) {
+  const data = event.data;
+
+  if (data.action === "togglePanel") {
+    togglePanel();
+  } else if (data.action === "openFilePicker") {
+    openFilePicker();
+  } else if (data.action === "sendMessage") {
+    sendMessage(data.message);
+  }
 }
 
 // Open file picker for document upload
@@ -537,10 +447,8 @@ function openFilePicker() {
 
 // Upload a document to the server
 async function uploadDocument(file) {
-  // Display a temporary item in the document list
-  const docId = `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const docItem = createDocumentListItem(docId, file.name, "Uploading...");
-  document.getElementById("bloom-doc-list").appendChild(docItem);
+  // Add uploading message
+  addBotMessage(`Uploading '${file.name}'...`);
 
   // Prepare form data
   const formData = new FormData();
@@ -556,61 +464,105 @@ async function uploadDocument(file) {
     const result = await response.json();
 
     if (response.ok) {
-      // Update document list item to show success
-      updateDocumentListItem(docId, file.name, "Processed", "success");
-      // Add confirmation message in chat
+      // Add success message
       addBotMessage(
         `I've processed '${file.name}'. What would you like to know about it?`
       );
+
+      // Store document in local storage for tracking
+      chrome.storage.local.get(["documents"], function (data) {
+        const documents = data.documents || [];
+        documents.push({
+          id: result.document_id,
+          name: file.name,
+          timestamp: new Date().toISOString(),
+        });
+        chrome.storage.local.set({ documents });
+      });
     } else {
-      // Update document list item to show error
-      updateDocumentListItem(docId, file.name, "Failed", "error");
-      console.error("Upload error:", result.detail);
+      // Add error message
+      addBotMessage(
+        `Sorry, I couldn't process '${file.name}'. Error: ${
+          result.detail || "Unknown error"
+        }`
+      );
     }
   } catch (error) {
-    // Update document list item to show error
-    updateDocumentListItem(docId, file.name, "Failed", "error");
+    // Add error message
+    addBotMessage(
+      `Sorry, I couldn't process '${file.name}'. Please check your connection.`
+    );
     console.error("Upload error:", error);
   }
 }
 
-// Create a document list item
-function createDocumentListItem(id, filename, status) {
-  const item = document.createElement("div");
-  item.id = id;
-  item.className = "bloom-doc-item";
-  item.innerHTML = `
-    <span class="bloom-doc-name">${filename}</span>
-    <span class="bloom-doc-status">${status}</span>
-  `;
-  return item;
+// Add a user message to the chat
+function addUserMessage(text) {
+  if (!panelFrame) return;
+
+  const frameDoc =
+    panelFrame.contentDocument || panelFrame.contentWindow.document;
+  const messagesContainer = frameDoc.getElementById("bloom-chat-messages");
+
+  if (!messagesContainer) return;
+
+  const messageDiv = frameDoc.createElement("div");
+  messageDiv.className = "bloom-message bloom-user-message";
+  messageDiv.textContent = text;
+
+  messagesContainer.appendChild(messageDiv);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  // Save to chat history
+  saveChatMessage("user", text);
 }
 
-// Update a document list item
-function updateDocumentListItem(id, filename, status, statusType) {
-  const item = document.getElementById(id);
-  if (!item) return;
+// Add a bot message to the chat
+function addBotMessage(text) {
+  if (!panelFrame) return;
 
-  item.innerHTML = `
-    <span class="bloom-doc-name">${filename}</span>
-    <span class="bloom-doc-status ${
-      statusType === "error" ? "bloom-status-error" : "bloom-status-success"
-    }">${status}</span>
-  `;
+  const frameDoc =
+    panelFrame.contentDocument || panelFrame.contentWindow.document;
+  const messagesContainer = frameDoc.getElementById("bloom-chat-messages");
+
+  if (!messagesContainer) return;
+
+  const messageDiv = frameDoc.createElement("div");
+  messageDiv.className = "bloom-message bloom-bot-message";
+  messageDiv.textContent = text;
+
+  messagesContainer.appendChild(messageDiv);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  // Save to chat history
+  saveChatMessage("bot", text);
+}
+
+// Save chat message to history
+function saveChatMessage(role, content) {
+  chrome.storage.local.get(["chatHistory"], function (data) {
+    const chatHistory = data.chatHistory || [];
+    chatHistory.push({ role, content });
+    chrome.storage.local.set({ chatHistory });
+  });
 }
 
 // Load chat history from storage
 function loadChatHistory() {
   chrome.storage.local.get(["chatHistory", "sessionId"], function (data) {
-    if (data.chatHistory && data.chatHistory.length > 0) {
-      chatHistory = data.chatHistory;
+    if (data.chatHistory && data.chatHistory.length > 0 && panelFrame) {
+      const frameDoc =
+        panelFrame.contentDocument || panelFrame.contentWindow.document;
+      const messagesContainer = frameDoc.getElementById("bloom-chat-messages");
 
-      // Render previous messages
-      const messagesContainer = document.getElementById("bloom-chat-messages");
+      if (!messagesContainer) return;
+
+      // Clear welcome message
       messagesContainer.innerHTML = "";
 
-      chatHistory.forEach((msg) => {
-        const messageDiv = document.createElement("div");
+      // Add messages from history
+      data.chatHistory.forEach((msg) => {
+        const messageDiv = frameDoc.createElement("div");
         messageDiv.className = `bloom-message bloom-${msg.role}-message`;
         messageDiv.textContent = msg.content;
         messagesContainer.appendChild(messageDiv);
@@ -625,84 +577,33 @@ function loadChatHistory() {
       sessionId = data.sessionId;
     } else {
       // Store new session ID
-      chrome.storage.local.set({ sessionId: sessionId });
+      chrome.storage.local.set({ sessionId });
     }
   });
 }
 
-// Save chat history to storage
-function saveChatHistory() {
-  chrome.storage.local.set({
-    chatHistory: chatHistory,
-    sessionId: sessionId,
-  });
-}
-
-// Add a user message to the chat
-function addUserMessage(text) {
-  const messageDiv = document.createElement("div");
-  messageDiv.className = "bloom-message bloom-user-message";
-  messageDiv.textContent = text;
-
-  const messagesContainer = document.getElementById("bloom-chat-messages");
-  messagesContainer.appendChild(messageDiv);
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-  // Add to chat history
-  chatHistory.push({
-    role: "user",
-    content: text,
-  });
-
-  // Save chat history
-  saveChatHistory();
-}
-
-// Add a bot message to the chat
-function addBotMessage(text) {
-  const messageDiv = document.createElement("div");
-  messageDiv.className = "bloom-message bloom-bot-message";
-  messageDiv.textContent = text;
-
-  const messagesContainer = document.getElementById("bloom-chat-messages");
-  messagesContainer.appendChild(messageDiv);
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-  // Add to chat history
-  chatHistory.push({
-    role: "bot",
-    content: text,
-  });
-
-  // Save chat history
-  saveChatHistory();
-}
-
 // Send a message to the server and get a response
-async function sendMessage() {
-  const input = document.getElementById("bloom-user-input");
-  const message = input.value.trim();
-
+async function sendMessage(message) {
   if (!message) return;
 
   // Add user message to chat
   addUserMessage(message);
 
-  // Clear input
-  input.value = "";
-
   // Show thinking indicator
-  const thinkingDiv = document.createElement("div");
+  const frameDoc =
+    panelFrame.contentDocument || panelFrame.contentWindow.document;
+  const messagesContainer = frameDoc.getElementById("bloom-chat-messages");
+
+  const thinkingDiv = frameDoc.createElement("div");
   thinkingDiv.className = "bloom-message bloom-bot-message bloom-thinking";
   thinkingDiv.innerHTML =
     'Thinking<span class="bloom-ellipsis"><span>.</span><span>.</span><span>.</span></span>';
 
-  const messagesContainer = document.getElementById("bloom-chat-messages");
   messagesContainer.appendChild(thinkingDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
   try {
-    // Send message to server with session ID for conversation memory
+    // Send message to server
     const response = await fetch(`${API_URL}/chat`, {
       method: "POST",
       headers: {
@@ -720,73 +621,70 @@ async function sendMessage() {
     messagesContainer.removeChild(thinkingDiv);
 
     if (response.ok) {
-      // Add bot response to chat
+      // Add bot response
       addBotMessage(result.response);
     } else {
       // Add error message
-      addBotMessage(
-        "Sorry, I encountered an error processing your request. Please try again."
-      );
+      addBotMessage("Sorry, I encountered an error. Please try again.");
       console.error("Chat error:", result.detail);
     }
   } catch (error) {
     // Remove thinking indicator
-    messagesContainer.removeChild(thinkingDiv);
+    if (thinkingDiv.parentNode) {
+      messagesContainer.removeChild(thinkingDiv);
+    }
 
     // Add error message
     addBotMessage(
-      "Sorry, I encountered an error. Please check your connection and try again."
+      "Sorry, I encountered an error. Please check your connection."
     );
     console.error("Chat error:", error);
   }
 }
 
-// Initialize the side panel when the page is fully loaded
-if (document.readyState === "complete") {
-  createSidePanel();
+// Initialize the panel
+function initialize() {
+  // Create the panel
+  createPanel();
 
-  // Check if panel should be open
+  // Check if panel should be open based on previous state
   chrome.storage.local.get(["isPanelOpen"], function (data) {
     if (data.isPanelOpen) {
-      setTimeout(togglePanel, 100);
+      setTimeout(() => {
+        togglePanel();
+      }, 300);
     }
   });
-} else {
-  window.addEventListener("load", function () {
-    createSidePanel();
+}
 
-    // Check if panel should be open
-    chrome.storage.local.get(["isPanelOpen"], function (data) {
-      if (data.isPanelOpen) {
-        setTimeout(togglePanel, 100);
-      }
-    });
-  });
+// Initialize when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initialize);
+} else {
+  initialize();
 }
 
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "togglePanel") {
-    if (sidePanel) {
-      togglePanel();
-    } else {
-      createSidePanel();
-      setTimeout(togglePanel, 100);
-    }
+    togglePanel();
     sendResponse({ success: true });
   } else if (message.action === "checkPanel") {
-    sendResponse({ exists: !!sidePanel });
+    sendResponse({ exists: !!panelFrame });
   } else if (message.action === "clearHistory") {
-    chatHistory = [];
-    saveChatHistory();
+    chrome.storage.local.set({ chatHistory: [] });
 
-    // Clear messages in UI
-    const messagesContainer = document.getElementById("bloom-chat-messages");
-    if (messagesContainer) {
-      messagesContainer.innerHTML = "";
-      addBotMessage(
-        "Chat history cleared. What would you like to know about your documents?"
-      );
+    if (panelFrame) {
+      const frameDoc =
+        panelFrame.contentDocument || panelFrame.contentWindow.document;
+      const messagesContainer = frameDoc.getElementById("bloom-chat-messages");
+
+      if (messagesContainer) {
+        messagesContainer.innerHTML = "";
+        addBotMessage(
+          "Chat history cleared. What would you like to know about your documents?"
+        );
+      }
     }
 
     sendResponse({ success: true });
