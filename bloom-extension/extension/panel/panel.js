@@ -1,12 +1,16 @@
 // BLOOM - Middlesex University Document Assistant
 // Side Panel Script
 
+// Import conversation manager
+import { ConversationManager } from "../conversation/conversation.js";
+
 document.addEventListener("DOMContentLoaded", function () {
   // DOM Elements
   const chatTab = document.getElementById("chat-tab");
   const docsTab = document.getElementById("docs-tab");
   const chatContent = document.getElementById("chat-content");
   const documentsContent = document.getElementById("documents-content");
+  const conversationContent = document.getElementById("conversation-content");
   const messagesContainer = document.getElementById("bloom-messages");
   const chatInput = document.getElementById("chat-input");
   const sendBtn = document.getElementById("send-btn");
@@ -24,7 +28,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const sourcesContainer = document.getElementById("bloom-sources");
   const hideSourcesBtn = document.getElementById("hide-sources-btn");
   const moduleSelect = document.getElementById("module-select");
-  const clearChatBtn = document.getElementById("clear-chat-btn");
+  const conversationModeBtn = document.getElementById("conversation-mode-btn");
 
   // State
   let currentTab = "chat";
@@ -36,6 +40,8 @@ document.addEventListener("DOMContentLoaded", function () {
   let currentModule = ""; // For tracking selected module
   let streamingMessageElement = null; // To track the currently streaming message
   let streamingFullText = ""; // Buffer for the full text being streamed
+  let isConversationMode = false; // Track if conversation mode is active
+  let conversationManager = null; // Will hold the ConversationManager instance
 
   // Custom confirmation dialog
   function showConfirmDialog(message, onConfirm, onCancel) {
@@ -69,6 +75,27 @@ document.addEventListener("DOMContentLoaded", function () {
     // Add event listeners
     okButton.addEventListener("click", handleOk);
     cancelButton.addEventListener("click", handleCancel);
+  }
+
+  // Helper function to show errors
+  function showError(message) {
+    const errorDiv = document.createElement("div");
+    errorDiv.className = "bloom-error";
+    errorDiv.textContent = message;
+
+    // Add to the active content
+    if (isConversationMode) {
+      conversationContent.appendChild(errorDiv);
+    } else {
+      chatContent.insertBefore(errorDiv, chatContent.firstChild);
+    }
+
+    // Remove after 5 seconds
+    setTimeout(() => {
+      if (errorDiv.parentNode) {
+        errorDiv.parentNode.removeChild(errorDiv);
+      }
+    }, 5000);
   }
 
   // Helper function to escape HTML in code blocks
@@ -278,6 +305,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Load available modules for the dropdown
     loadModules();
+
+    // Check if conversation mode was previously active
+    chrome.storage.local.get("isConversationMode", function (data) {
+      if (data.isConversationMode) {
+        setTimeout(() => switchToConversationMode(), 500);
+      }
+    });
   }
 
   // Load documents from storage
@@ -430,7 +464,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     if (tabName === "chat") {
-      chatContent.classList.add("bloom-active");
+      if (isConversationMode) {
+        // If we're in conversation mode, show conversation content
+        conversationContent.classList.add("bloom-active");
+      } else {
+        // Otherwise show text chat
+        chatContent.classList.add("bloom-active");
+      }
     } else if (tabName === "documents") {
       documentsContent.classList.add("bloom-active");
     }
@@ -668,11 +708,127 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  // CONVERSATION MODE FUNCTIONALITY
+
+  // Switch to conversation mode
+  async function switchToConversationMode() {
+    if (isConversationMode) return;
+
+    // Hide chat content
+    chatContent.classList.remove("bloom-active");
+
+    // Show conversation content
+    conversationContent.classList.add("bloom-active");
+
+    // Update UI state
+    conversationModeBtn.classList.add("bloom-active");
+    isConversationMode = true;
+
+    // Save mode setting
+    chrome.storage.local.set({ isConversationMode: true });
+
+    // Initialize conversation mode if not already
+    if (!conversationManager) {
+      try {
+        // Create conversation manager
+        conversationManager = new ConversationManager(conversationContent);
+
+        // Create message handler to bridge between conversation and chat modes
+        const messageHandler = {
+          // Called when user speaks a message
+          onUserMessage: async (text) => {
+            // Add to chat history (same as in text mode)
+            addUserMessage(text);
+
+            try {
+              // Get response using the same backend as text mode
+              const response = await fetch(`${apiUrl}/chat`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  query: text,
+                  session_id: sessionId,
+                  module_code: currentModule,
+                }),
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                // Add to chat history
+                addBotMessage(data.response);
+
+                // Update sources if available
+                if (data.sources && data.sources.length > 0) {
+                  latestSources = data.sources;
+                  updateSourcePreview();
+                }
+
+                // Speak the response
+                await conversationManager.speakResponse(data.response);
+                return true;
+              } else {
+                throw new Error(data.detail || "Unknown error");
+              }
+            } catch (error) {
+              console.error("Chat error:", error);
+              throw error;
+            }
+          },
+
+          // Called when switching modes
+          onSwitchMode: (mode) => {
+            if (mode === "text") {
+              switchToTextMode();
+            }
+          },
+        };
+
+        // Initialize the conversation manager
+        await conversationManager.initialize(messageHandler);
+      } catch (error) {
+        console.error("Failed to initialize conversation mode:", error);
+        // Show error and fall back to text mode
+        showError("Failed to initialize conversation mode: " + error.message);
+        switchToTextMode();
+      }
+    }
+  }
+
+  // Switch back to text mode
+  function switchToTextMode() {
+    if (!isConversationMode) return;
+
+    // Hide conversation content
+    conversationContent.classList.remove("bloom-active");
+
+    // Show chat content
+    chatContent.classList.add("bloom-active");
+
+    // Update UI state
+    conversationModeBtn.classList.remove("bloom-active");
+    isConversationMode = false;
+
+    // Save mode setting
+    chrome.storage.local.set({ isConversationMode: false });
+  }
+
   // Event Listeners
 
   // Tab switching
   chatTab.addEventListener("click", () => switchTab("chat"));
   docsTab.addEventListener("click", () => switchTab("documents"));
+
+  // Conversation mode toggle
+  conversationModeBtn.addEventListener("click", () => {
+    if (isConversationMode) {
+      switchToTextMode();
+    } else {
+      switchToConversationMode();
+    }
+  });
 
   // Module dropdown
   moduleSelect.addEventListener("change", () => {
@@ -783,53 +939,6 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         } catch (error) {
           console.error("Error clearing chat history:", error);
-        }
-      }
-    );
-  });
-
-  // Clear chat button
-  clearChatBtn.addEventListener("click", () => {
-    showConfirmDialog(
-      "Are you sure you want to clear the conversation?",
-      async () => {
-        try {
-          // Call API to clear conversation
-          const response = await fetch(`${apiUrl}/chat/clear`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              session_id: sessionId,
-            }),
-          });
-
-          if (response.ok) {
-            // Clear messages UI
-            messagesContainer.innerHTML = "";
-
-            // Add welcome message
-            addBotMessage(
-              "Chat history cleared. What would you like to know about your documents?"
-            );
-
-            // Hide sources
-            toggleSourcePreview(false);
-
-            // Reset conversation in local storage
-            chrome.storage.local.set({ chatHistory: [] });
-          } else {
-            console.error("Failed to clear chat history");
-            addBotMessage(
-              "Sorry, I couldn't clear the chat history. Please try again."
-            );
-          }
-        } catch (error) {
-          console.error("Error clearing chat history:", error);
-          addBotMessage(
-            "Sorry, I encountered an error trying to clear the chat history."
-          );
         }
       }
     );
