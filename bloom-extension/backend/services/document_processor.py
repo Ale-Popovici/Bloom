@@ -68,13 +68,20 @@ async def process_document(file: UploadFile, module_code: Optional[str] = None) 
 
         for i, chunk in enumerate(chunks):
             texts.append(chunk)
-            metadatas.append({
+
+            # Create metadata without None values
+            metadata = {
                 "document_id": document_id,
                 "filename": file.filename,
-                "module_code": module_code,
                 "chunk_index": i,
                 "total_chunks": len(chunks)
-            })
+            }
+
+            # Only add module_code if it's not None
+            if module_code is not None:
+                metadata["module_code"] = module_code
+
+            metadatas.append(metadata)
 
         # Update progress
         processing_status[document_id]["progress"] = 70

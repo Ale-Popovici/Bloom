@@ -5,6 +5,7 @@ import logging
 
 from services.vector_store import search_documents, list_collections
 from services.openai_service import generate_response, clear_conversation, get_document_ids_for_session, get_conversation_history
+from utils.folder_manager import list_modules, get_module_metadata
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -34,7 +35,7 @@ async def chat(query: ChatQuery):
     """
     try:
         logger.info(
-            f"Received chat query: {query.query} for session: {query.session_id}")
+            f"Received chat query: {query.query} for session: {query.session_id}, module: {query.module_code or 'all'}")
 
         # Determine which collection to search in
         collection_name = f"module_{query.module_code}" if query.module_code else "bloom_documents"
@@ -94,15 +95,25 @@ async def get_available_modules():
     Get a list of available modules for the chat dropdown
     """
     try:
-        collections = list_collections()
-
-        # Filter to just get module collections and extract module codes
+        # Try to get modules from both ChromaDB collections and file system
         modules = []
+
+        # Get modules from ChromaDB collections
+        collections = list_collections()
         for collection in collections:
             if collection.startswith("module_"):
                 module_code = collection.replace("module_", "")
-                modules.append(
-                    {"code": module_code, "name": f"Module {module_code}"})
+                if not any(m["code"] == module_code for m in modules):
+                    modules.append(
+                        {"code": module_code, "name": f"Module {module_code}"})
+
+        # Get modules from file system
+        file_modules = list_modules()
+        for module in file_modules:
+            module_code = module.get("module_code")
+            if module_code and not any(m["code"] == module_code for m in modules):
+                modules.append({"code": module_code, "name": module.get(
+                    "module_name", f"Module {module_code}")})
 
         return {"modules": modules}
     except Exception as e:

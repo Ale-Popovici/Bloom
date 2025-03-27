@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BLOOM Assistant</title>
+    <link rel="stylesheet" href="content.css" />
+  </head>
+  <body>
+    <div class="bloom-panel-header">
+      <div class="bloom-logo-container">
+        <span class="bloom-logo-text">BLOOM</span>
+        <span class="bloom-logo-subtitle">Middlesex University</span>
+      </div>
+      <button
+        id="bloom-close-panel"
+        class="bloom-close-btn"
+        title="Close Panel (Ctrl+Shift+B)"
+      >
+        ×
+      </button>
+    </div>
+
+    <div class="bloom-module-selector">
+      <label for="bloom-module-select" class="bloom-module-label"
+        >Module:</label
+      >
+      <select id="bloom-module-select" class="bloom-module-dropdown">
+        <option value="">All Documents</option>
+        <!-- Module options will be added dynamically -->
+      </select>
+    </div>
+
+    <div class="bloom-panel-content">
+      <div id="bloom-chat-messages" class="bloom-messages-container">
+        <div class="bloom-message bloom-bot-message">
+          Hello! I'm BLOOM, your document assistant for Middlesex University.
+          Upload course materials, and I'll help you find information quickly.
+        </div>
+      </div>
+
+      <div class="bloom-upload-area">
+        <div id="bloom-doc-list" class="bloom-doc-list"></div>
+        <button id="bloom-upload-btn" class="bloom-btn bloom-upload-btn">
+          <span class="bloom-btn-icon">+</span> Upload Documents
+        </button>
+      </div>
+
+      <div class="bloom-input-area">
+        <input
+          type="text"
+          id="bloom-user-input"
+          class="bloom-input"
+          placeholder="Ask about your documents..."
+        />
+        <button id="bloom-send-btn" class="bloom-btn bloom-send-btn">
+          <span class="bloom-btn-icon">↑</span>
+        </button>
+      </div>
+    </div>
+
+    <script src="content-panel.js"></script>
+  </body>
+</html>
