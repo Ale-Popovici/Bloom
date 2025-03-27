@@ -14,8 +14,9 @@ from services.document_processor import process_document
 from utils.folder_manager import create_module_folders, save_file_to_module
 from utils.text_splitter import split_text
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# Set up logging with more detail
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -81,6 +82,9 @@ async def start_scraping_task(url: str, module_code: str, module_name: str, cook
     task = ScrapingTask(url, module_code, module_name)
     scraping_status[task.task_id] = task
 
+    logger.info(
+        f"Starting scraping task {task.task_id} for module {module_code} ({module_name})")
+
     # Start the scraping process in the background
     asyncio.create_task(scrape_moodle_course(task, cookies))
 
@@ -96,10 +100,12 @@ async def scrape_moodle_course(task: ScrapingTask, cookies: Dict[str, str]) -> N
         cookies: The cookies from the browser for authentication
     """
     task.status = "scraping"
+    logger.info(f"Starting scraping process for module {task.module_code}")
 
     try:
         # Create module folders
         module_dir = create_module_folders(task.module_code)
+        logger.info(f"Created module directory: {module_dir}")
 
         # Determine collection name for this module
         collection_name = f"module_{task.module_code}"
@@ -112,46 +118,62 @@ async def scrape_moodle_course(task: ScrapingTask, cookies: Dict[str, str]) -> N
 
             # Parse HTML
             soup = BeautifulSoup(response.text, 'html.parser')
+            logger.info(f"Successfully parsed Moodle page HTML")
+
+            # Always extract HTML content from the page first
+            logger.info(f"Extracting HTML content from Moodle page")
+            page_content = extract_text_content(soup)
+
+            if page_content:
+                # Save extracted content as a text file
+                content_filename = f"{task.module_code}_page_content.txt"
+                content_path = os.path.join(
+                    module_dir, "scraped", content_filename)
+
+                with open(content_path, 'w', encoding='utf-8') as f:
+                    f.write(page_content)
+
+                logger.info(f"Saved page content to {content_path}")
+
+                # Add page content to vector database
+                document_id = await process_text_content(
+                    page_content,
+                    task.module_code,
+                    task.module_name,
+                    content_filename,
+                    source_type="moodle_page"
+                )
+                logger.info(
+                    f"Processed page content with document ID: {document_id}")
+                task.files_downloaded.append(content_filename)
+                task.completed_files += 1
 
             # Extract all PDF and DOCX links
             file_links = extract_file_links(soup, task.url)
             task.files_found = file_links
-            task.total_files = len(file_links)
+            task.total_files = len(file_links) + 1  # +1 for the page content
 
             logger.info(
                 f"Found {len(file_links)} PDF/DOCX files in {task.module_code}")
             task.progress = 10
 
-            # If no files found, extract text content as a fallback
-            if not file_links:
-                logger.info(
-                    f"No files found, extracting text content from page")
-                content = extract_text_content(soup)
-
-                if content:
-                    # Save extracted content as a text file
-                    content_filename = f"{task.module_code}_content.txt"
-                    content_path = os.path.join(
-                        module_dir, "scraped", content_filename)
-
-                    with open(content_path, 'w', encoding='utf-8') as f:
-                        f.write(content)
-
-                    logger.info(f"Saved text content to {content_path}")
-
-                    # Add text content to vector database
-                    await process_text_content(content, task.module_code, task.module_name, content_filename)
-
-                    task.files_downloaded.append(content_filename)
-                    task.completed_files += 1
-
             # Download each file
             for i, file_info in enumerate(file_links):
                 try:
                     filename, url = file_info
-                    await download_and_process_file(url, filename, task.module_code, module_dir, cookies)
-                    task.files_downloaded.append(filename)
-                    task.completed_files += 1
+                    logger.info(
+                        f"Processing file {i+1}/{len(file_links)}: {filename}")
+
+                    success = await download_and_process_file(url, filename, task.module_code, module_dir, cookies)
+
+                    if success:
+                        task.files_downloaded.append(filename)
+                        task.completed_files += 1
+                        logger.info(f"Successfully processed {filename}")
+                    else:
+                        task.errors.append(f"Failed to process {filename}")
+                        logger.error(f"Failed to process {filename}")
+
                     task.progress = 10 + int(85 * (i + 1) / len(file_links))
                 except Exception as e:
                     logger.error(
@@ -315,28 +337,89 @@ def extract_text_content(soup: BeautifulSoup) -> str:
     if title:
         content.append(f"# {title.get_text(strip=True)}\n")
 
+    # Extract course header info
+    header = soup.find('div', class_='page-header-headings')
+    if header:
+        content.append(f"## Course Header: {header.get_text(strip=True)}\n")
+
+    # Extract course summary if available
+    summary = soup.find('div', class_='course-summary')
+    if summary:
+        content.append("## Course Summary\n")
+        content.append(summary.get_text(strip=True) + "\n")
+
+    # Try to extract course information from course-content-header
+    content_header = soup.find('div', class_='course-content-header')
+    if content_header:
+        content.append("## Course Content Header\n")
+        content.append(content_header.get_text(strip=True) + "\n")
+
     # Extract main content
     main_content = soup.find('div', class_='course-content')
     if main_content:
+        content.append("## Course Content\n")
+
+        # Extract any introduction content
+        intro = main_content.find('div', class_='summary')
+        if intro:
+            content.append("### Introduction\n")
+            content.append(intro.get_text(strip=True) + "\n")
+
         # Extract section by section
         sections = main_content.find_all('li', class_='section')
         for section in sections:
             section_name = section.find('h3', class_='sectionname')
             if section_name:
-                content.append(f"\n## {section_name.get_text(strip=True)}\n")
+                content.append(f"\n### {section_name.get_text(strip=True)}\n")
+            else:
+                content.append("\n### Unnamed Section\n")
 
-            activities = section.find_all('div', class_='activity')
+            # Get section summary if available
+            section_summary = section.find('div', class_='summary')
+            if section_summary:
+                content.append(section_summary.get_text(strip=True) + "\n")
+
+            # Process activities
+            activities = section.find_all(
+                ['div', 'li'], class_=['activity', 'modtype'])
             for activity in activities:
-                activity_name = activity.find('span', class_='instancename')
+                # Get activity name
+                activity_name = activity.find(['span', 'div'], class_=[
+                                              'instancename', 'activityname'])
                 if activity_name:
                     content.append(
-                        f"\n### {activity_name.get_text(strip=True)}\n")
+                        f"\n#### {activity_name.get_text(strip=True)}\n")
 
-                # Get description if available
-                description = activity.find('div', class_='contentafterlink')
-                if description:
-                    content.append(description.get_text(strip=True))
+                # Get activity content
+                for content_element in activity.find_all(['div', 'span'], class_=['contentafterlink', 'contentwithoutlink', 'activity-content']):
+                    activity_text = content_element.get_text(strip=True)
+                    if activity_text:
+                        content.append(activity_text + "\n")
 
+    # Look for announcements block
+    announcements = soup.find(
+        'div', class_=['block_news_items', 'block_latest_announcements'])
+    if announcements:
+        content.append("\n## Announcements\n")
+        for item in announcements.find_all('div', class_='info'):
+            content.append("- " + item.get_text(strip=True) + "\n")
+
+    # Additional page-specific blocks
+    for block in soup.find_all('div', class_='block'):
+        # Find block title
+        block_title = block.find('h3', class_='card-title')
+        if block_title:
+            title_text = block_title.get_text(strip=True)
+            if title_text:
+                content.append(f"\n## {title_text}\n")
+                # Extract block content
+                for content_element in block.find_all('div', class_='card-text'):
+                    block_text = content_element.get_text(strip=True)
+                    if block_text:
+                        content.append(block_text + "\n")
+
+    logger.info(
+        f"Extracted {len(content)} sections of content from Moodle page")
     return "\n".join(content)
 
 
@@ -378,11 +461,22 @@ async def download_and_process_file(url: str, filename: str, module_code: str,
             async def read(self):
                 return self._content
 
-        temp_file = TempUploadFile(filename, response.content)
-        document_id = await process_document(temp_file, module_code)
+            async def seek(self, position):
+                # Add seek method for compatibility with document processor
+                pass
 
-        logger.info(f"Processed file with document ID: {document_id}")
-        return True
+        temp_file = TempUploadFile(filename, response.content)
+
+        try:
+            # Pass module_code explicitly to ensure it's stored in the correct collection
+            document_id = await process_document(temp_file, module_code)
+            logger.info(
+                f"Successfully processed file with document ID: {document_id}")
+            return True
+        except Exception as e:
+            logger.error(
+                f"Error processing document with document_processor: {str(e)}")
+            return False
 
     except Exception as e:
         logger.error(f"Error downloading file {filename}: {str(e)}")
@@ -390,7 +484,8 @@ async def download_and_process_file(url: str, filename: str, module_code: str,
 
 
 async def process_text_content(content: str, module_code: str,
-                               module_name: str, filename: str) -> str:
+                               module_name: str, filename: str,
+                               source_type: str = "scraped_text") -> str:
     """
     Process extracted text content for the vector database
 
@@ -399,6 +494,7 @@ async def process_text_content(content: str, module_code: str,
         module_code: The module code
         module_name: The module name
         filename: The filename
+        source_type: Type of source (moodle_page, scraped_text, etc.)
 
     Returns:
         Document ID
@@ -409,6 +505,7 @@ async def process_text_content(content: str, module_code: str,
     try:
         # Split text into chunks
         chunks = split_text(content)
+        logger.info(f"Split text content into {len(chunks)} chunks")
 
         # Prepare data for Chroma DB
         texts = []
@@ -423,14 +520,19 @@ async def process_text_content(content: str, module_code: str,
                 "module_name": module_name,
                 "chunk_index": i,
                 "total_chunks": len(chunks),
-                "source_type": "scraped_text"
+                "source_type": source_type
             })
 
         # Add to vector database in the module collection
-        add_documents(texts, metadatas, collection_name)
+        try:
+            add_documents(texts, metadatas, collection_name)
+            logger.info(
+                f"Added {len(texts)} chunks to collection '{collection_name}' for document ID {document_id}")
+        except Exception as e:
+            logger.error(
+                f"Error adding chunks to collection '{collection_name}': {str(e)}")
+            raise e
 
-        logger.info(
-            f"Added text content to vector database with ID {document_id}")
         return document_id
 
     except Exception as e:

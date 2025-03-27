@@ -38,25 +38,45 @@ async def chat(query: ChatQuery):
             f"Received chat query: {query.query} for session: {query.session_id}, module: {query.module_code or 'all'}")
 
         # Determine which collection to search in
-        collection_name = f"module_{query.module_code}" if query.module_code else "bloom_documents"
+        # Use 'all' for searching across all collections when no module_code is specified
+        if not query.module_code:
+            collection_name = "all"
+            logger.info(
+                "No module specified, searching across all collections")
+        else:
+            collection_name = f"module_{query.module_code}"
+            logger.info(f"Searching in module collection: {collection_name}")
 
         # Search for relevant document chunks
         results = search_documents(query.query, collection_name, k=8)
 
+        logger.info(f"Found {len(results)} relevant chunks for query")
+
         # Generate response using OpenAI with session tracking
         response = generate_response(query.query, results, query.session_id)
 
-        return {
-            "response": response,
-            "sources": [
-                {
+        # Format sources for the response
+        sources = []
+        for result in results:
+            if "metadata" in result:
+                source = {
                     "document_id": result["metadata"]["document_id"],
                     "filename": result["metadata"]["filename"],
-                    "module_code": result["metadata"].get("module_code", "Unknown"),
                     "relevance": result["score"]
                 }
-                for result in results if "metadata" in result
-            ][:3]  # Return top 3 sources
+
+                # Add module_code if present in metadata
+                if "module_code" in result["metadata"]:
+                    source["module_code"] = result["metadata"]["module_code"]
+                else:
+                    source["module_code"] = "Unknown"
+
+                sources.append(source)
+
+        # Return top 3 sources
+        return {
+            "response": response,
+            "sources": sources[:3]
         }
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}")
@@ -115,6 +135,7 @@ async def get_available_modules():
                 modules.append({"code": module_code, "name": module.get(
                     "module_name", f"Module {module_code}")})
 
+        logger.info(f"Found {len(modules)} available modules")
         return {"modules": modules}
     except Exception as e:
         logger.error(f"Error listing available modules: {str(e)}")

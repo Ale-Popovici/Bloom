@@ -10,8 +10,9 @@ from typing import Dict, Any, Optional
 from services.vector_store import get_collection, add_documents
 from utils.text_splitter import split_text
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# Set up logging with more detail
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Track processing status
@@ -36,6 +37,9 @@ async def process_document(file: UploadFile, module_code: Optional[str] = None) 
     # Determine collection name
     collection_name = f"module_{module_code}" if module_code else "bloom_documents"
 
+    logger.info(
+        f"Processing document '{file.filename}' with ID {document_id} for collection '{collection_name}'")
+
     # Update processing status
     processing_status[document_id] = {
         "filename": file.filename,
@@ -48,16 +52,22 @@ async def process_document(file: UploadFile, module_code: Optional[str] = None) 
         # Extract text based on file type
         if file.filename.lower().endswith('.pdf'):
             text = await extract_text_from_pdf(file)
+            logger.info(
+                f"Extracted {len(text)} characters from PDF '{file.filename}'")
         elif file.filename.lower().endswith('.docx'):
             text = await extract_text_from_docx(file)
+            logger.info(
+                f"Extracted {len(text)} characters from DOCX '{file.filename}'")
         else:
-            raise ValueError("Unsupported file format")
+            raise ValueError(f"Unsupported file format: {file.filename}")
 
         # Update progress
         processing_status[document_id]["progress"] = 30
 
         # Split text into chunks
         chunks = split_text(text)
+        logger.info(
+            f"Split text into {len(chunks)} chunks for document '{file.filename}'")
 
         # Update progress
         processing_status[document_id]["progress"] = 50
@@ -87,11 +97,20 @@ async def process_document(file: UploadFile, module_code: Optional[str] = None) 
         processing_status[document_id]["progress"] = 70
 
         # Add documents to ChromaDB using the specified collection
-        add_documents(texts, metadatas, collection_name)
+        try:
+            add_documents(texts, metadatas, collection_name)
+            logger.info(
+                f"Successfully added {len(texts)} chunks to collection '{collection_name}' for document '{file.filename}'")
+        except Exception as e:
+            logger.error(
+                f"Failed to add chunks to collection '{collection_name}': {str(e)}")
+            raise e
 
         # Update status to complete
         processing_status[document_id]["status"] = "complete"
         processing_status[document_id]["progress"] = 100
+        logger.info(
+            f"Completed processing document '{file.filename}' with ID {document_id}")
 
         return document_id
 
@@ -99,7 +118,7 @@ async def process_document(file: UploadFile, module_code: Optional[str] = None) 
         # Update status to failed
         processing_status[document_id]["status"] = "failed"
         processing_status[document_id]["error"] = str(e)
-        logger.error(f"Error processing document {file.filename}: {str(e)}")
+        logger.error(f"Error processing document '{file.filename}': {str(e)}")
         raise e
 
 
@@ -114,13 +133,18 @@ async def extract_text_from_pdf(file: UploadFile) -> str:
         str: Extracted text
     """
     # Save upload to temp file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-        temp_file.write(await file.read())
-        temp_path = temp_file.name
-
+    temp_path = None
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_path = temp_file.name
+
+        logger.info(f"Saved PDF to temporary file: {temp_path}")
+
         # Extract text using PyMuPDF
         doc = fitz.open(temp_path)
+        logger.info(f"Opened PDF with {len(doc)} pages")
 
         # More comprehensive extraction with metadata
         text_parts = []
@@ -148,10 +172,22 @@ async def extract_text_from_pdf(file: UploadFile) -> str:
                 toc_text += f"{'  ' * (level-1)}- {title} (Page {page})\n"
             text_parts.append(toc_text)
 
-        return "\n\n".join(text_parts)
+        full_text = "\n\n".join(text_parts)
+        logger.info(f"Extracted {len(full_text)} characters from PDF")
+        return full_text
+
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {str(e)}")
+        raise e
+
     finally:
         # Clean up temp file
-        os.unlink(temp_path)
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+            logger.info(f"Removed temporary PDF file: {temp_path}")
+
+        # Reset file pointer for potential reuse
+        await file.seek(0)
 
 
 async def extract_text_from_docx(file: UploadFile) -> str:
@@ -165,13 +201,19 @@ async def extract_text_from_docx(file: UploadFile) -> str:
         str: Extracted text
     """
     # Save upload to temp file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
-        temp_file.write(await file.read())
-        temp_path = temp_file.name
-
+    temp_path = None
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_path = temp_file.name
+
+        logger.info(f"Saved DOCX to temporary file: {temp_path}")
+
         # Extract text using python-docx
         doc = docx.Document(temp_path)
+        logger.info(
+            f"Opened DOCX with {len(doc.paragraphs)} paragraphs and {len(doc.tables)} tables")
 
         # Extract document properties
         core_properties = doc.core_properties
@@ -224,10 +266,22 @@ async def extract_text_from_docx(file: UploadFile) -> str:
                 table_text += " | ".join(row_text) + "\n"
             text_parts.append(table_text)
 
-        return "\n\n".join(text_parts)
+        full_text = "\n\n".join(text_parts)
+        logger.info(f"Extracted {len(full_text)} characters from DOCX")
+        return full_text
+
+    except Exception as e:
+        logger.error(f"Error extracting text from DOCX: {str(e)}")
+        raise e
+
     finally:
         # Clean up temp file
-        os.unlink(temp_path)
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+            logger.info(f"Removed temporary DOCX file: {temp_path}")
+
+        # Reset file pointer for potential reuse
+        await file.seek(0)
 
 
 def get_processing_status(document_id: str) -> Dict[str, Any]:
