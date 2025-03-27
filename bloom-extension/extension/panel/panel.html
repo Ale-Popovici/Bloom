@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BLOOM - Middlesex University</title>
     <link rel="stylesheet" href="panel.css" />
+    <!-- Add Microsoft Speech SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
   </head>
   <body>
     <div class="bloom-panel">
@@ -14,6 +16,35 @@
           <span class="bloom-subtitle">Middlesex University</span>
         </div>
         <div class="bloom-actions">
+          <!-- New Conversation Mode Button -->
+          <button
+            id="conversation-mode-btn"
+            class="bloom-btn bloom-icon-btn bloom-conversation-btn"
+            title="Switch to Conversation Mode"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M19 12C19 13.8565 18.2625 15.637 16.9497 16.9497C15.637 18.2625 13.8565 19 12 19C10.1435 19 8.36301 18.2625 7.05025 16.9497C5.7375 15.637 5 13.8565 5 12C5 10.1435 5.7375 8.36301 7.05025 7.05025C8.36301 5.7375 10.1435 5 12 5C13.8565 5 15.637 5.7375 16.9497 7.05025C18.2625 8.36301 19 10.1435 19 12Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
           <button
             id="upload-btn"
             class="bloom-btn bloom-icon-btn"
@@ -289,6 +320,11 @@
             style="display: none"
           />
         </div>
+
+        <!-- This div will hold the conversation UI -->
+        <div id="conversation-content" class="bloom-tab-content">
+          <!-- Conversation UI will be created dynamically -->
+        </div>
       </div>
 
       <!-- Settings Modal -->
@@ -335,6 +371,42 @@
               </div>
             </div>
 
+            <!-- Azure Speech Settings -->
+            <div class="bloom-setting-group">
+              <h3>Azure Speech Settings</h3>
+              <div class="bloom-setting">
+                <label for="azure-speech-key">Azure Speech Service Key</label>
+                <input
+                  type="password"
+                  id="azure-speech-key"
+                  class="bloom-input"
+                  placeholder="Enter your Azure Speech key"
+                />
+              </div>
+              <div class="bloom-setting">
+                <label for="azure-speech-region">Azure Region</label>
+                <select id="azure-speech-region" class="bloom-input">
+                  <option value="eastus">East US</option>
+                  <option value="eastus2">East US 2</option>
+                  <option value="westus">West US</option>
+                  <option value="westus2">West US 2</option>
+                  <option value="northeurope">North Europe</option>
+                  <option value="westeurope">West Europe</option>
+                </select>
+              </div>
+              <div class="bloom-setting">
+                <label for="azure-voice">Voice</label>
+                <select id="azure-voice" class="bloom-input">
+                  <option value="en-US-JennyNeural">Jenny (Female)</option>
+                  <option value="en-US-GuyNeural">Guy (Male)</option>
+                  <option value="en-US-AriaNeural">Aria (Female)</option>
+                  <option value="en-GB-SoniaNeural">
+                    Sonia (British Female)
+                  </option>
+                </select>
+              </div>
+            </div>
+
             <div class="bloom-setting-group">
               <h3>Chat History</h3>
               <button
@@ -376,7 +448,9 @@
           </div>
         </div>
       </div>
-      <script src="panel.js"></script>
+
+      <!-- Change from normal script to module script -->
+      <script type="module" src="panel.js"></script>
     </div>
   </body>
 </html>

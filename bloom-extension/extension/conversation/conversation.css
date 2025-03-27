@@ -1,0 +1,145 @@
+/* Conversation Mode Styles for BLOOM */
+
+.bloom-avatar-container {
+    flex: 1;
+    background-color: #f5f5f5;
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    margin: 10px;
+    min-height: 250px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .bloom-conversation-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 15px 10px;
+    gap: 15px;
+  }
+  
+  .bloom-mic-button {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--mdx-red);
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .bloom-mic-button:hover {
+    background-color: var(--mdx-red-dark);
+    transform: scale(1.05);
+  }
+  
+  .bloom-mic-button.bloom-active {
+    background-color: #28a745;
+    animation: pulse 1.5s infinite;
+  }
+  
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+    }
+    70% {
+      box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+    }
+  }
+  
+  .bloom-caption-toggle,
+  .bloom-back-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: transparent;
+    color: var(--mdx-red);
+    border: 1px solid var(--mdx-red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .bloom-caption-toggle:hover,
+  .bloom-back-button:hover {
+    background-color: var(--mdx-red-light);
+  }
+  
+  .bloom-caption-toggle.bloom-active {
+    background-color: var(--mdx-red);
+    color: white;
+  }
+  
+  .bloom-status-text {
+    text-align: center;
+    padding: 5px 10px;
+    color: #666;
+    font-size: 14px;
+  }
+  
+  .bloom-captions-container {
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    margin: 10px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 16px;
+  }
+  
+  .bloom-captions-container p {
+    margin: 5px 0;
+  }
+  
+  .bloom-captions-container .bloom-interim {
+    font-style: italic;
+    opacity: 0.8;
+  }
+  
+  .bloom-error {
+    color: var(--mdx-red);
+    text-align: center;
+    padding: 20px;
+    background-color: var(--mdx-red-light);
+    border-radius: 5px;
+    margin: 10px;
+  }
+  
+  /* Avatar animations and expressions */
+  .avatar-neutral .mouth {
+    transform: scaleY(1);
+  }
+  
+  .avatar-speaking .mouth {
+    animation: speak 0.3s infinite alternate;
+  }
+  
+  .avatar-thinking .eyebrows {
+    transform: translateY(-2px);
+  }
+  
+  .avatar-happy .mouth {
+    transform: scaleY(1.5) rotate(10deg);
+  }
+  
+  .avatar-confused .eyebrows {
+    transform: rotate(15deg);
+  }
+  
+  @keyframes speak {
+    from { transform: scaleY(1); }
+    to { transform: scaleY(1.5); }
+  }

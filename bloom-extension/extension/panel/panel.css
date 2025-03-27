@@ -731,3 +731,58 @@
   gap: 12px;
   border-top: 1px solid var(--border-color);
 }
+/* Add this at the end of your panel.css file */
+
+/* Conversation Mode Button Enhancement */
+.bloom-conversation-btn {
+    position: relative;
+    background-color: var(--mdx-purple, #2D2A4A) !important;
+  }
+  
+  .bloom-conversation-btn::after {
+    content: "New!";
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--mdx-red);
+    color: white;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 10px;
+    font-weight: bold;
+  }
+  
+  .bloom-conversation-btn.bloom-active {
+    background-color: var(--mdx-red) !important;
+  }
+  
+  .bloom-conversation-btn.bloom-active::after {
+    content: none;
+  }
+  
+  /* Conversation loading state */
+  #conversation-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    text-align: center;
+    color: #666;
+    padding: 20px;
+  }
+  
+  #conversation-loading .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: var(--mdx-red);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 15px;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }

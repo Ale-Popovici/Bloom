@@ -1,7 +1,9 @@
 // BLOOM - Document Assistant for Middlesex University
 // Content script with completely independent side panel
 
-let panelFrame = null;
+if (typeof panelFrame === "undefined") {
+  let panelFrame = null;
+}
 let isPanelOpen = false;
 const API_URL = "http://localhost:8000";
 let sessionId = generateSessionId();
