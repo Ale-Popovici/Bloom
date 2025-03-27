@@ -8,7 +8,9 @@ from pydantic import BaseModel
 from services.scraper_service import (
     start_scraping_task,
     get_scraping_status,
-    list_scraping_tasks
+    list_scraping_tasks,
+    add_folder_documents,
+    complete_folder_traversal
 )
 from utils.folder_manager import (
     create_module_folders,
@@ -38,6 +40,19 @@ class StartScrapingRequest(BaseModel):
     module_code: str
     module_name: str
     cookies: Dict[str, str]
+    documents: Optional[List[Dict[str, str]]] = None
+    has_folders: Optional[bool] = False
+
+
+class FolderDocumentsRequest(BaseModel):
+    task_id: str
+    module_code: str
+    folder_url: str
+    documents: List[Dict[str, str]]
+
+
+class CompleteFoldersRequest(BaseModel):
+    task_id: str
 
 
 class FileUploadRequest(BaseModel):
@@ -63,11 +78,42 @@ async def start_scraping(request: StartScrapingRequest):
             request.url,
             request.module_code,
             request.module_name,
-            request.cookies
+            request.cookies,
+            request.documents,
+            request.has_folders
         )
         return {"task_id": task_id, "status": "started"}
     except Exception as e:
         logger.error(f"Error starting scraping task: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add_folder_documents")
+async def add_documents_from_folder(request: FolderDocumentsRequest):
+    """Add documents from a folder to an existing scraping task"""
+    try:
+        logger.info(
+            f"Received {len(request.documents)} documents from folder: {request.folder_url}")
+        result = await add_folder_documents(
+            request.task_id,
+            request.module_code,
+            request.folder_url,
+            request.documents
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error adding folder documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/complete_folders")
+async def complete_folders(request: CompleteFoldersRequest):
+    """Mark folder traversal as complete for a task"""
+    try:
+        result = await complete_folder_traversal(request.task_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error completing folder traversal: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -93,11 +139,12 @@ async def upload_file(
 ):
     """Upload a file to a module"""
     try:
-        # Check file type
-        if not file.filename.lower().endswith(('.pdf', '.docx')):
+        # Check file type - expanded to include PPT
+        valid_extensions = ('.pdf', '.docx', '.doc', '.pptx', '.ppt')
+        if not any(file.filename.lower().endswith(ext) for ext in valid_extensions):
             raise HTTPException(
                 status_code=400,
-                detail="Only PDF and DOCX files are supported"
+                detail=f"Only {', '.join(valid_extensions)} files are supported"
             )
 
         # Read file content
@@ -112,7 +159,7 @@ async def upload_file(
         )
 
         # Process file for vector database
-        document_id = await process_document(file)
+        document_id = await process_document(file, module_code)
 
         return {
             "module_code": module_code,

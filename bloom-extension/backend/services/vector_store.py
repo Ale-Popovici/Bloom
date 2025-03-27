@@ -79,7 +79,7 @@ def search_documents(query, collection_name="bloom_documents", k=5):
 
 def search_all_collections(query, k=5):
     """
-    Search across all collections and return combined results
+    Search across all collections and return combined results with additional debugging
     """
     client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
     collections = client.list_collections()
@@ -87,8 +87,13 @@ def search_all_collections(query, k=5):
 
     logger.info(f"Found {len(collections)} collections to search")
 
+    # List all collections for debugging
+    collection_names = [c.name for c in collections]
+    logger.info(f"Available collections: {collection_names}")
+
     # If no collections, return empty results
     if not collections:
+        logger.warning("No collections found in the database!")
         return []
 
     # Search in default collection if it exists
@@ -103,26 +108,50 @@ def search_all_collections(query, k=5):
             default_formatted = format_results(default_results)
             logger.info(
                 f"Found {len(default_formatted)} results in default collection")
+
+            # Additional debugging for default collection
+            if default_formatted:
+                logger.info(
+                    f"Sample result from default collection: {default_formatted[0]['text'][:100]}...")
+                logger.info(f"Metadata: {default_formatted[0]['metadata']}")
+            else:
+                logger.warning("Default collection returned no results!")
+
             all_results.extend(default_formatted)
         except Exception as e:
             logger.error(f"Error searching default collection: {str(e)}")
 
     # Search in all module collections
-    for collection in collections:
-        if collection.name.startswith("module_"):
-            try:
-                module_collection = get_collection(collection.name)
-                module_results = module_collection.query(
-                    query_texts=[query],
-                    n_results=k
-                )
-                module_formatted = format_results(module_results)
+    module_collections = [
+        c for c in collections if c.name.startswith("module_")]
+    logger.info(
+        f"Found {len(module_collections)} module collections to search")
+
+    for collection in module_collections:
+        try:
+            logger.info(f"Searching collection: {collection.name}")
+            module_collection = get_collection(collection.name)
+            module_results = module_collection.query(
+                query_texts=[query],
+                n_results=k
+            )
+            module_formatted = format_results(module_results)
+            logger.info(
+                f"Found {len(module_formatted)} results in {collection.name}")
+
+            # Additional debugging for module collection
+            if module_formatted:
                 logger.info(
-                    f"Found {len(module_formatted)} results in {collection.name}")
-                all_results.extend(module_formatted)
-            except Exception as e:
-                logger.error(
-                    f"Error searching collection {collection.name}: {str(e)}")
+                    f"Sample result from {collection.name}: {module_formatted[0]['text'][:100]}...")
+                logger.info(f"Metadata: {module_formatted[0]['metadata']}")
+            else:
+                logger.warning(
+                    f"Collection {collection.name} returned no results!")
+
+            all_results.extend(module_formatted)
+        except Exception as e:
+            logger.error(
+                f"Error searching collection {collection.name}: {str(e)}")
 
     # Sort by relevance (lower distance means more relevant)
     all_results.sort(key=lambda x: x.get("score", 1.0))
@@ -131,22 +160,82 @@ def search_all_collections(query, k=5):
     final_results = all_results[:k]
     logger.info(
         f"Returning top {len(final_results)} results across all collections")
+
+    # Log summary of results
+    if final_results:
+        sources = {}
+        for result in final_results:
+            collection = result.get("metadata", {}).get(
+                "module_code", "default")
+            sources[collection] = sources.get(collection, 0) + 1
+
+        logger.info(f"Results by source: {sources}")
+    else:
+        logger.warning("No results found across any collections!")
+
     return final_results
 
 
 def format_results(results):
-    """Format ChromaDB results into a standardized format"""
+    """Format ChromaDB results into a standardized format with better error handling"""
     formatted_results = []
-    if not results or "ids" not in results or not results["ids"] or not results["ids"][0]:
+
+    # Basic validation of results
+    if not results:
+        logger.warning("Empty results object received")
         return []
 
-    for i in range(len(results["ids"][0])):
-        formatted_results.append({
-            "id": results["ids"][0][i],
-            "text": results["documents"][0][i],
-            "metadata": results["metadatas"][0][i],
-            "score": results["distances"][0][i] if "distances" in results else 1.0
-        })
+    if "ids" not in results:
+        logger.warning("Results object has no 'ids' field")
+        return []
+
+    if not results["ids"] or not results["ids"][0]:
+        logger.warning("Results contains empty IDs")
+        return []
+
+    # Check that all required fields are present
+    required_fields = ["ids", "documents", "metadatas"]
+    for field in required_fields:
+        if field not in results:
+            logger.error(f"Results missing required field: {field}")
+            return []
+
+    # Verify field lengths match
+    field_lengths = {
+        field: len(results[field][0]
+                   ) if results[field] and results[field][0] else 0
+        for field in required_fields
+    }
+
+    if len(set(field_lengths.values())) > 1:
+        logger.error(f"Result field length mismatch: {field_lengths}")
+        # Try to continue with the minimum length
+        min_length = min(field_lengths.values())
+    else:
+        min_length = field_lengths["ids"]
+
+    # Format the results
+    for i in range(min_length):
+        try:
+            result = {
+                "id": results["ids"][0][i],
+                "text": results["documents"][0][i],
+                "metadata": results["metadatas"][0][i],
+                "score": results["distances"][0][i] if "distances" in results and results["distances"][0] else 1.0
+            }
+
+            # Verify basic result integrity
+            if not result["text"] or len(result["text"].strip()) < 10:
+                logger.warning(f"Result {i} has very little text content")
+
+            if not result["metadata"]:
+                logger.warning(f"Result {i} has no metadata")
+                result["metadata"] = {"warning": "No metadata available"}
+
+            formatted_results.append(result)
+        except Exception as e:
+            logger.error(f"Error formatting result {i}: {str(e)}")
+
     return formatted_results
 
 

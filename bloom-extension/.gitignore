@@ -39,4 +39,4 @@ Thumbs.db
 # venv
 venv
 
-data/modules/*
+backend/data/modules/*
