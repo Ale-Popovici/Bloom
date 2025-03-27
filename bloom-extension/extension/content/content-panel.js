@@ -12,10 +12,45 @@ const sendBtn = document.getElementById("bloom-send-btn");
 const userInput = document.getElementById("bloom-user-input");
 const moduleSelect = document.getElementById("bloom-module-select");
 const messagesContainer = document.getElementById("bloom-chat-messages");
+const clearChatBtn = document.getElementById("bloom-clear-chat-btn");
 
 // Tracking variables for streaming messages
 let streamingMessageElement = null;
 let streamingFullText = "";
+
+// Custom confirmation dialog
+function showConfirmDialog(message, onConfirm, onCancel) {
+  const dialog = document.getElementById("bloom-confirm-dialog");
+  const confirmMessage = document.getElementById("bloom-confirm-message");
+  const okButton = document.getElementById("bloom-confirm-ok");
+  const cancelButton = document.getElementById("bloom-confirm-cancel");
+
+  // Set dialog message
+  confirmMessage.textContent = message;
+
+  // Show dialog
+  dialog.style.display = "flex";
+
+  // Handle OK button
+  const handleOk = () => {
+    dialog.style.display = "none";
+    okButton.removeEventListener("click", handleOk);
+    cancelButton.removeEventListener("click", handleCancel);
+    if (onConfirm) onConfirm();
+  };
+
+  // Handle Cancel button
+  const handleCancel = () => {
+    dialog.style.display = "none";
+    okButton.removeEventListener("click", handleOk);
+    cancelButton.removeEventListener("click", handleCancel);
+    if (onCancel) onCancel();
+  };
+
+  // Add event listeners
+  okButton.addEventListener("click", handleOk);
+  cancelButton.addEventListener("click", handleCancel);
+}
 
 // Helper function to escape HTML in code blocks
 function escapeHTML(text) {
@@ -158,16 +193,17 @@ function parseMarkdown(text) {
     // We'll store them as we see placeholders
     let finalIndex = 0;
 
+    // Process academic-style footnote citations
     text = text.replace(/\|\|FOOTNOTE_CITATION_(\d+)\|\|/g, function (_m, idx) {
       const i = parseInt(idx, 10);
       footnotesList += `
-          <div class="bloom-footnote-item">
-            <span class="bloom-footnote-number">[${i + 1}]</span>
-            ${citations[i]}
-          </div>
-        `;
+            <div class="bloom-footnote-item">
+              <span class="bloom-footnote-number">[${i + 1}]</span>
+              <div>${citations[i]}</div>
+            </div>
+          `;
       finalIndex++;
-      // Return a small marker in the text
+      // Return a small marker in the text - modified to not add duplicate numbers
       return `<span class="bloom-footnote-citation">[${i + 1}]</span>`;
     });
 
@@ -251,6 +287,13 @@ userInput.addEventListener("keypress", (e) => {
 moduleSelect.addEventListener("change", () => {
   const selectedModule = moduleSelect.value;
   sendToParent("moduleChanged", { module: selectedModule });
+});
+
+// Clear chat button handler
+clearChatBtn.addEventListener("click", () => {
+  showConfirmDialog("Are you sure you want to clear the conversation?", () => {
+    sendToParent("clearConversation");
+  });
 });
 
 // Listen for messages from parent window

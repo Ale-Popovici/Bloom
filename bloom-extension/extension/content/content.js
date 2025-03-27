@@ -159,6 +159,9 @@ function handleIframeMessage(event) {
       loadChatHistory();
       loadModules();
       break;
+    case "clearConversation":
+      clearConversation();
+      break;
   }
 }
 
@@ -440,6 +443,43 @@ async function sendMessage(message) {
       "Sorry, I encountered an error. Please check your connection."
     );
     console.error("Chat error:", error);
+  }
+}
+
+// Clear the conversation history
+async function clearConversation() {
+  try {
+    // Call API to clear conversation
+    const response = await fetch(`${API_URL}/chat/clear`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+      }),
+    });
+
+    if (response.ok) {
+      // Clear the chat history in storage
+      chrome.storage.local.set({ chatHistory: [] });
+
+      // Clear messages UI and add welcome message
+      sendToFrame("clearMessages");
+      addBotMessage(
+        "Chat history cleared. What would you like to know about your documents?"
+      );
+    } else {
+      console.error("Failed to clear chat history");
+      addBotMessage(
+        "Sorry, I couldn't clear the chat history. Please try again."
+      );
+    }
+  } catch (error) {
+    console.error("Error clearing chat history:", error);
+    addBotMessage(
+      "Sorry, I encountered an error trying to clear the chat history."
+    );
   }
 }
 

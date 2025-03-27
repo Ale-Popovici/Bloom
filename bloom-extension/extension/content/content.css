@@ -327,9 +327,10 @@ body {
   cursor: pointer;
 }
 
+/* Fix: Remove the content property that was duplicating the citation number */
 .bloom-footnote-citation::before {
   counter-increment: citation;
-  content: "[" counter(citation) "]";
+  /* content property removed to fix duplication */
 }
 
 .bloom-footnotes {
@@ -338,16 +339,111 @@ body {
   border-top: 1px solid #ddd;
   font-size: 0.85em;
   color: #666;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .bloom-footnote-item {
   display: flex;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   line-height: 1.4;
+  max-width: 100%;
 }
 
 .bloom-footnote-number {
   min-width: 30px;
+  flex-shrink: 0;
   color: var(--mdx-red);
   font-weight: bold;
+}
+
+/* Add this to ensure the citation reference text wraps properly */
+.bloom-footnote-item > div {
+  flex: 1;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: calc(100% - 30px);
+}
+
+/* Clear Conversation Button Styles */
+.bloom-clear-btn {
+  background-color: transparent;
+  color: var(--mdx-red);
+  border: 1px solid var(--mdx-red);
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  transition: background-color 0.2s;
+}
+
+.bloom-clear-btn:hover {
+  background-color: var(--mdx-red-light);
+}
+
+.bloom-clear-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Custom Confirmation Dialog Styles */
+.bloom-confirm-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+}
+
+.bloom-confirm-content {
+  background-color: white;
+  width: 90%;
+  max-width: 350px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  animation: bloomFadeIn 0.2s ease-out;
+}
+
+@keyframes bloomFadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bloom-confirm-header {
+  background-color: var(--mdx-red);
+  color: white;
+  padding: 12px 16px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.bloom-confirm-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.bloom-confirm-body {
+  padding: 20px 16px;
+  color: var(--text-dark);
+}
+
+.bloom-confirm-footer {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid var(--border-color);
 }
