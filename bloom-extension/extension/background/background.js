@@ -17,7 +17,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // Add the extension icon to browser toolbar
 chrome.action.setIcon({
   path: {
-    16: "assets/icons/favicon.ico",
+    16: "assets/icons/icon-16.png",
     48: "assets/icons/icon-192.png",
     128: "assets/icons/icon-512.png",
   },

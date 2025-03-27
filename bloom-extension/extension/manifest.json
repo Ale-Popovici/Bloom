@@ -4,13 +4,13 @@
     "version": "1.2.0",
     "description": "Chat with your course documents for Middlesex University with Moodle scraping support",
     "icons": {
-      "16": "assets/icons/favicon.ico",
+      "16": "assets/icons/icon-16.png",
       "48": "assets/icons/icon-192.png",
       "128": "assets/icons/icon-512.png"
     },
     "action": {
       "default_icon": {
-        "16": "assets/icons/favicon.ico",
+        "16": "assets/icons/icon-16.png",
         "48": "assets/icons/icon-192.png",
         "128": "assets/icons/icon-512.png"
       }
