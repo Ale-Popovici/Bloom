@@ -46,27 +46,35 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/'/g, "&#039;");
   }
 
-  // Markdown parser function with improved handling for partial content
+  // Markdown parser function with citation footnotes
   function parseMarkdown(text) {
     if (!text) return "";
 
-    // Handle code blocks with ```
+    // First, save any citations to process them separately
+    let citations = [];
+    let citationIndex = 0;
+
+    // Regular expression to match citations in parentheses that mention files/chunks
+    const citationRegex =
+      /\(((?:[^()]+(?:File\.pdf|\.docx|\.pdf|Chunk|Chunks))[^()]*)\)/g;
+
+    // Replace citations with placeholders
+    text = text.replace(citationRegex, function (match, citation) {
+      citations.push(citation);
+      return `||FOOTNOTE_CITATION_${citationIndex++}||`;
+    });
+
+    // Process standard markdown
     text = text.replace(/```([\s\S]*?)```/g, function (match, code) {
       return "<pre><code>" + escapeHTML(code) + "</code></pre>";
     });
 
-    // Handle inline code with backticks - prevent parsing markdown inside code
     text = text.replace(/`([^`]+)`/g, function (match, code) {
       return "<code>" + escapeHTML(code) + "</code>";
     });
 
-    // Handle bold
     text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-
-    // Handle italic
     text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-
-    // Handle links
     text = text.replace(
       /\[([^\]]+)\]\(([^)]+)\)/g,
       '<a href="$2" target="_blank">$1</a>'
@@ -150,6 +158,27 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
       // Single paragraph - handle newlines as line breaks
       text = `<p>${text.replace(/\n/g, "<br>")}</p>`;
+    }
+
+    // Create footnotes list
+    let footnotesList = "";
+    citationIndex = 0;
+
+    // Process academic-style footnote citations
+    text = text.replace(
+      /\|\|FOOTNOTE_CITATION_(\d+)\|\|/g,
+      function (match, index) {
+        const i = parseInt(index);
+        footnotesList += `<div class="bloom-footnote-item"><span class="bloom-footnote-number">[${
+          i + 1
+        }]</span> ${citations[i]}</div>`;
+        return `<span class="bloom-footnote-citation"></span>`;
+      }
+    );
+
+    // Add footnotes list if we used the footnote style
+    if (footnotesList) {
+      text += `<div class="bloom-footnotes">${footnotesList}</div>`;
     }
 
     return text;

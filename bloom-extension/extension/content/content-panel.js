@@ -27,16 +27,40 @@ function escapeHTML(text) {
     .replace(/'/g, "&#039;");
 }
 
-// Markdown parser function with improved handling for partial content
+/*
+ * Markdown parser function with citation footnotes
+ * plus the existing logic for code blocks, bold, italic, lists, etc.
+ */
 function parseMarkdown(text) {
   if (!text) return "";
 
-  // Handle code blocks with ```
+  // ----------------------------------------------------------------
+  // 1) Extract footnotes/citations into placeholders
+  //    (Regex to catch parentheses that mention file/chunk references)
+  // ----------------------------------------------------------------
+  let citations = [];
+  let citationIndex = 0;
+
+  // Example: capturing references that mention "File.pdf", ".docx", "Chunk", etc.
+  const citationRegex =
+    /\(((?:[^()]+(?:File\.pdf|\.docx|\.pdf|Chunk|Chunks))[^()]*)\)/g;
+
+  text = text.replace(citationRegex, function (match, captured) {
+    // Store this citation text
+    citations.push(captured);
+    return `||FOOTNOTE_CITATION_${citationIndex++}||`;
+  });
+
+  // ----------------------------------------------------------------
+  // 2) Continue with your existing Markdown transformations
+  // ----------------------------------------------------------------
+
+  // Handle code blocks with triple backticks
   text = text.replace(/```([\s\S]*?)```/g, function (match, code) {
     return "<pre><code>" + escapeHTML(code) + "</code></pre>";
   });
 
-  // Handle inline code with backticks - prevent parsing markdown inside code
+  // Handle inline code with single backticks
   text = text.replace(/`([^`]+)`/g, function (match, code) {
     return "<code>" + escapeHTML(code) + "</code>";
   });
@@ -53,7 +77,10 @@ function parseMarkdown(text) {
     '<a href="$2" target="_blank">$1</a>'
   );
 
-  // Handle unordered lists - more careful handling for partial content
+  // ----------------------------------------------------------------
+  // 3) Handle lists more carefully to allow partial content
+  //    (Unordered lists first)
+  // ----------------------------------------------------------------
   let lines = text.split("\n");
   let inList = false;
   let listBuffer = "";
@@ -61,34 +88,31 @@ function parseMarkdown(text) {
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim().match(/^-\s+(.+)$/)) {
       if (!inList) {
-        // Start a new list
+        // start a new UL
         inList = true;
         listBuffer = "<ul>";
       }
-
-      // Add this list item
       listBuffer +=
         "<li>" + lines[i].trim().replace(/^-\s+(.+)$/, "$1") + "</li>";
       lines[i] = "";
     } else if (inList && lines[i].trim() === "") {
-      // Empty line after list - close the list
+      // empty line after a list => close it
       listBuffer += "</ul>";
       lines[i] = listBuffer;
       listBuffer = "";
       inList = false;
     }
   }
-
-  // If we're still in a list at the end, close it
+  // if we ended in a list, close it
   if (inList) {
     listBuffer += "</ul>";
     lines.push(listBuffer);
   }
-
-  // Reassemble lines
   text = lines.filter((line) => line !== "").join("\n");
 
-  // Handle ordered lists
+  // ----------------------------------------------------------------
+  // 4) Ordered lists
+  // ----------------------------------------------------------------
   lines = text.split("\n");
   inList = false;
   listBuffer = "";
@@ -96,55 +120,77 @@ function parseMarkdown(text) {
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim().match(/^\d+\.\s+(.+)$/)) {
       if (!inList) {
-        // Start a new list
         inList = true;
         listBuffer = "<ol>";
       }
-
-      // Add this list item
       listBuffer +=
         "<li>" + lines[i].trim().replace(/^\d+\.\s+(.+)$/, "$1") + "</li>";
       lines[i] = "";
     } else if (inList && lines[i].trim() === "") {
-      // Empty line after list - close the list
       listBuffer += "</ol>";
       lines[i] = listBuffer;
       listBuffer = "";
       inList = false;
     }
   }
-
-  // If we're still in a list at the end, close it
   if (inList) {
     listBuffer += "</ol>";
     lines.push(listBuffer);
   }
-
-  // Reassemble lines
   text = lines.filter((line) => line !== "").join("\n");
 
-  // Handle paragraphs - if content is partial, this might not work perfectly
-  // but it will continuously improve as more content arrives
+  // ----------------------------------------------------------------
+  // 5) Handle paragraphs
+  // ----------------------------------------------------------------
   let paragraphs = text.split(/\n\n+/);
   if (paragraphs.length > 1) {
     text = paragraphs.map((p) => (p.trim() ? `<p>${p}</p>` : "")).join("");
   } else {
-    // Single paragraph - handle newlines as line breaks
+    // If there's only one paragraph, replace single newlines with <br>
     text = `<p>${text.replace(/\n/g, "<br>")}</p>`;
+  }
+
+  // ----------------------------------------------------------------
+  // 6) Insert footnotes at the bottom if any citations were found
+  // ----------------------------------------------------------------
+  let footnotesList = "";
+  if (citations.length > 0) {
+    // We'll store them as we see placeholders
+    let finalIndex = 0;
+
+    text = text.replace(/\|\|FOOTNOTE_CITATION_(\d+)\|\|/g, function (_m, idx) {
+      const i = parseInt(idx, 10);
+      footnotesList += `
+          <div class="bloom-footnote-item">
+            <span class="bloom-footnote-number">[${i + 1}]</span>
+            ${citations[i]}
+          </div>
+        `;
+      finalIndex++;
+      // Return a small marker in the text
+      return `<span class="bloom-footnote-citation">[${i + 1}]</span>`;
+    });
+
+    // If we built any footnotes, append them
+    if (finalIndex > 0) {
+      text += `<div class="bloom-footnotes">${footnotesList}</div>`;
+    }
   }
 
   return text;
 }
 
-// Stream message function with real-time Markdown rendering
+// ------------------------------------------------------------------
+// Streaming logic for bot messages with real-time partial rendering
+// ------------------------------------------------------------------
 function streamMessage(element, text, index = 0, chunkSize = 4) {
   streamingMessageElement = element; // Track current streaming element
 
   if (index >= text.length) {
     // Done streaming, ensure final render is complete
     element.classList.remove("streaming");
-    streamingMessageElement = null; // Clear tracking
-    streamingFullText = ""; // Reset the buffer
+    streamingMessageElement = null;
+    streamingFullText = "";
     return;
   }
 
@@ -164,9 +210,9 @@ function streamMessage(element, text, index = 0, chunkSize = 4) {
   // Schedule the next chunk with a small delay
   setTimeout(() => {
     streamMessage(element, text, index + chunkSize, chunkSize);
-  }, 15); // Slightly longer delay to ensure smooth rendering
+  }, 15);
 
-  // If we're on the last chunk, remove the streaming animation class
+  // If we're on the last chunk, remove streaming class slightly later
   if (index + chunkSize >= text.length) {
     setTimeout(() => {
       element.classList.remove("streaming");
@@ -244,9 +290,9 @@ window.addEventListener("message", (event) => {
   }
 });
 
-// Add message to chat with real-time Markdown
+// Add message to chat with real-time Markdown streaming for bot
 function addMessage(role, text) {
-  // If there's already a message streaming, complete it immediately
+  // If there's already a message streaming, finalize it first
   if (streamingMessageElement) {
     streamingMessageElement.innerHTML = parseMarkdown(streamingFullText);
     streamingMessageElement.classList.remove("streaming");
@@ -256,14 +302,13 @@ function addMessage(role, text) {
 
   const messageDiv = document.createElement("div");
   messageDiv.className = `bloom-message bloom-${role}-message`;
-
   messagesContainer.appendChild(messageDiv);
 
   if (role === "bot") {
-    // Stream bot messages with real-time Markdown
+    // Stream bot messages
     streamMessage(messageDiv, text);
   } else {
-    // For user messages, apply markdown immediately
+    // Immediate render for user messages
     messageDiv.innerHTML = parseMarkdown(text);
   }
 

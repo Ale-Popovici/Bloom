@@ -181,6 +181,7 @@
     border-radius: 8px;
     position: relative;
     animation: fadeIn 0.3s;
+    counter-reset: citation;
   }
   
   @keyframes fadeIn {
@@ -598,4 +599,39 @@
 @keyframes cursorBlink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* Academic-style Footnote Citation Styles */
+.bloom-footnote-citation {
+  vertical-align: super;
+  font-size: 0.75em;
+  color: var(--mdx-red);
+  font-weight: bold;
+  padding: 0 3px;
+  cursor: pointer;
+}
+
+.bloom-footnote-citation::before {
+  counter-increment: citation;
+  content: "[" counter(citation) "]";
+}
+
+.bloom-footnotes {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #ddd;
+  font-size: 0.85em;
+  color: #666;
+}
+
+.bloom-footnote-item {
+  display: flex;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.bloom-footnote-number {
+  min-width: 30px;
+  color: var(--mdx-red);
+  font-weight: bold;
 }
