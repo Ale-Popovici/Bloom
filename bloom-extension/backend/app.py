@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -10,6 +10,9 @@ import logging
 from services.document_processor import process_document, get_processing_status
 from services.vector_store import search_documents
 from services.openai_service import generate_response, clear_conversation, get_document_ids_for_session, get_conversation_history
+# Import the routers
+from routes.scraper import router as scraper_router
+from routes.chat import router as chat_router
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -33,22 +36,13 @@ app.add_middleware(
 
 
 # Models
-class ChatQuery(BaseModel):
-    query: str
-    session_id: Optional[str] = "default"
-
-
 class DocumentRequest(BaseModel):
     document_id: str
 
 
-class SessionRequest(BaseModel):
-    session_id: str = "default"
-
-
 # API routes
 @app.post("/documents/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...), module_code: Optional[str] = None):
     """
     Upload and process a document (PDF or DOCX)
     """
@@ -57,12 +51,13 @@ async def upload_document(file: UploadFile = File(...)):
             status_code=400, detail="Only PDF and DOCX files are supported")
 
     try:
-        # Process document directly
-        document_id = await process_document(file)
+        # Process document directly with optional module code
+        document_id = await process_document(file, module_code)
         return {
             "message": "Document processed successfully",
             "document_id": document_id,
-            "filename": file.filename
+            "filename": file.filename,
+            "module_code": module_code
         }
     except Exception as e:
         logger.error(f"Error processing document: {str(e)}")
@@ -78,64 +73,6 @@ async def document_status(document_id: str):
     if status.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Document not found")
     return status
-
-
-@app.post("/chat")
-async def chat(query: ChatQuery):
-    """
-    Chat with documents using GPT-4o with conversation memory
-    """
-    try:
-        logger.info(
-            f"Received chat query: {query.query} for session: {query.session_id}")
-
-        # Search for relevant document chunks
-        # Increased from 5 to 8 for more context
-        results = search_documents(query.query, k=8)
-
-        # Generate response using OpenAI with session tracking
-        response = generate_response(query.query, results, query.session_id)
-
-        return {
-            "response": response,
-            "sources": [
-                {
-                    "document_id": result["metadata"]["document_id"],
-                    "filename": result["metadata"]["filename"],
-                    "relevance": result["score"]
-                }
-                for result in results if "metadata" in result
-            ][:3]  # Return top 3 sources
-        }
-    except Exception as e:
-        logger.error(f"Error in chat endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/chat/clear")
-async def clear_chat_history(session: SessionRequest):
-    """
-    Clear the chat history for a session
-    """
-    try:
-        result = clear_conversation(session.session_id)
-        return result
-    except Exception as e:
-        logger.error(f"Error clearing chat history: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/chat/history")
-async def get_chat_history(session_id: str = "default", max_messages: int = 10):
-    """
-    Get the chat history for a session
-    """
-    try:
-        history = get_conversation_history(session_id, max_messages)
-        return {"history": history}
-    except Exception as e:
-        logger.error(f"Error getting chat history: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/documents/list")
@@ -177,6 +114,11 @@ async def health_check():
     Health check endpoint
     """
     return {"status": "healthy", "version": "1.1.0"}
+
+
+# Include the routers
+app.include_router(scraper_router)
+app.include_router(chat_router)
 
 
 if __name__ == "__main__":

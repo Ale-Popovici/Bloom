@@ -17,34 +17,43 @@ class OpenAIEmbeddingFunction:
         return get_embeddings(input)
 
 
-# Singleton pattern to avoid multiple instances
-_vector_db = None
+# Collections cache to avoid multiple instances
+_collections = {}
 
 
-def get_vector_db():
+def get_collection(collection_name="bloom_documents"):
     """
-    Returns a singleton instance of the ChromaDB client
+    Returns a collection for the specified module (or default)
     """
-    global _vector_db
-    if _vector_db is None:
+    global _collections
+    if collection_name not in _collections:
         # Initialize ChromaDB client
         client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
 
         # Get or create collection with proper embedding function
-        _vector_db = client.get_or_create_collection(
-            name="bloom_documents",
+        _collections[collection_name] = client.get_or_create_collection(
+            name=collection_name,
             embedding_function=OpenAIEmbeddingFunction()
         )
 
-    return _vector_db
+    return _collections[collection_name]
 
 
-def search_documents(query, k=5):
+def list_collections():
     """
-    Search for similar documents in the vector DB
+    List all available collections/modules
     """
-    db = get_vector_db()
-    results = db.query(
+    client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
+    collections = client.list_collections()
+    return [collection.name for collection in collections]
+
+
+def search_documents(query, collection_name="bloom_documents", k=5):
+    """
+    Search for similar documents in the specified collection
+    """
+    collection = get_collection(collection_name)
+    results = collection.query(
         query_texts=[query],
         n_results=k
     )
@@ -60,3 +69,26 @@ def search_documents(query, k=5):
         })
 
     return formatted_results
+
+
+def add_documents(texts, metadatas, collection_name="bloom_documents"):
+    """
+    Add documents to the specified collection
+    """
+    collection = get_collection(collection_name)
+
+    # Generate IDs based on metadata
+    ids = []
+    for i, metadata in enumerate(metadatas):
+        document_id = metadata.get("document_id", "doc")
+        chunk_index = metadata.get("chunk_index", i)
+        ids.append(f"{document_id}_{chunk_index}")
+
+    # Add to collection
+    collection.add(
+        ids=ids,
+        documents=texts,
+        metadatas=metadatas
+    )
+
+    return ids

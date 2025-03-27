@@ -5,9 +5,9 @@ import fitz  # PyMuPDF
 import docx
 import tempfile
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from services.vector_store import get_vector_db
+from services.vector_store import get_collection, add_documents
 from utils.text_splitter import split_text
 
 # Set up logging
@@ -18,13 +18,14 @@ logger = logging.getLogger(__name__)
 processing_status = {}
 
 
-async def process_document(file: UploadFile) -> str:
+async def process_document(file: UploadFile, module_code: Optional[str] = None) -> str:
     """
     Process a document and add it to the vector store.
     This is a simplified version that doesn't use a background queue.
 
     Args:
         file (UploadFile): The uploaded file
+        module_code (str, optional): Module code for collection organization
 
     Returns:
         str: The document ID
@@ -32,11 +33,15 @@ async def process_document(file: UploadFile) -> str:
     # Generate unique ID for the document
     document_id = str(uuid.uuid4())
 
+    # Determine collection name
+    collection_name = f"module_{module_code}" if module_code else "bloom_documents"
+
     # Update processing status
     processing_status[document_id] = {
         "filename": file.filename,
         "status": "processing",
-        "progress": 0
+        "progress": 0,
+        "collection": collection_name
     }
 
     try:
@@ -57,21 +62,16 @@ async def process_document(file: UploadFile) -> str:
         # Update progress
         processing_status[document_id]["progress"] = 50
 
-        # Get vector DB
-        db = get_vector_db()
-
         # Prepare data for Chroma DB
-        ids = []
         texts = []
         metadatas = []
 
         for i, chunk in enumerate(chunks):
-            chunk_id = f"{document_id}_{i}"
-            ids.append(chunk_id)
             texts.append(chunk)
             metadatas.append({
                 "document_id": document_id,
                 "filename": file.filename,
+                "module_code": module_code,
                 "chunk_index": i,
                 "total_chunks": len(chunks)
             })
@@ -79,12 +79,8 @@ async def process_document(file: UploadFile) -> str:
         # Update progress
         processing_status[document_id]["progress"] = 70
 
-        # Add documents to ChromaDB
-        db.add(
-            ids=ids,
-            documents=texts,
-            metadatas=metadatas
-        )
+        # Add documents to ChromaDB using the specified collection
+        add_documents(texts, metadatas, collection_name)
 
         # Update status to complete
         processing_status[document_id]["status"] = "complete"

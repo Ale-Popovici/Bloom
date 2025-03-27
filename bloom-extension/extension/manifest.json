@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "BLOOM - Middlesex University Assistant",
-    "version": "1.1.0",
-    "description": "Chat with your course documents for Middlesex University",
+    "version": "1.2.0",
+    "description": "Chat with your course documents for Middlesex University with Moodle scraping support",
     "icons": {
       "16": "assets/icons/favicon.ico",
       "48": "assets/icons/icon-192.png",
@@ -19,13 +19,15 @@
       "storage",
       "activeTab",
       "scripting",
-      "contextMenus"
+      "contextMenus",
+      "cookies"
     ],
     "background": {
       "service_worker": "background/background.js"
     },
     "host_permissions": [
-      "http://localhost:8000/*"
+      "http://localhost:8000/*",
+      "https://mdx.mrooms.net/*"
     ],
     "content_scripts": [
       {
@@ -45,7 +47,7 @@
     },
     "web_accessible_resources": [
       {
-        "resources": ["assets/*", "panel/*"],
+        "resources": ["assets/*", "panel/*", "content/moodle_scraper.js"],
         "matches": ["<all_urls>"]
       }
     ]

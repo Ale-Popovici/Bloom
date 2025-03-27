@@ -71,6 +71,43 @@
     gap: 8px;
   }
   
+  /* Module Selector Dropdown */
+  .bloom-module-selector {
+    padding: 8px 16px;
+    background-color: var(--bg-grey);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .bloom-module-label {
+    font-size: 14px;
+    color: var(--text-dark);
+    font-weight: 500;
+  }
+  
+  .bloom-module-dropdown {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: white;
+    color: var(--text-dark);
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  
+  .bloom-module-dropdown:focus {
+    border-color: var(--mdx-red);
+  }
+  
+  .bloom-module-dropdown option {
+    padding: 4px;
+  }
+  
   /* Tabs Styles */
   .bloom-tabs {
     display: flex;

@@ -412,6 +412,12 @@ function handleIframeMessage(event) {
     openFilePicker();
   } else if (data.action === "sendMessage") {
     sendMessage(data.message);
+  } else if (data.action === "checkMoodlePage") {
+    // New handler for Moodle page check
+    checkMoodlePage();
+  } else if (data.action === "startScraping") {
+    // New handler for starting scraping
+    startScraping();
   }
 }
 
@@ -642,6 +648,186 @@ async function sendMessage(message) {
   }
 }
 
+/**
+ * Check if the current page is a Moodle course page and get module info
+ */
+function checkMoodlePage() {
+  // Inject the Moodle scraper script if not already present
+  injectMoodleScraperScript()
+    .then(() => {
+      // Wait for scraper to initialize
+      const checkScraperReady = setInterval(() => {
+        if (window.MoodleScraper && window.MoodleScraper.initialized) {
+          clearInterval(checkScraperReady);
+
+          // Check if it's a Moodle page
+          const isMoodlePage = window.MoodleScraper.isMoodleCoursePage();
+
+          if (isMoodlePage) {
+            // Extract module info
+            const moduleInfo = window.MoodleScraper.extractModuleInfo();
+
+            // Send response back to iframe
+            window.postMessage(
+              {
+                action: "moodlePageCheckResult",
+                isMoodlePage: true,
+                moduleCode: moduleInfo.moduleCode,
+                moduleName: moduleInfo.moduleName,
+              },
+              "*"
+            );
+          } else {
+            // Not a Moodle page
+            window.postMessage(
+              {
+                action: "moodlePageCheckResult",
+                isMoodlePage: false,
+              },
+              "*"
+            );
+          }
+        }
+      }, 100);
+
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkScraperReady);
+        // Send failure response if scraper didn't initialize
+        if (!window.MoodleScraper || !window.MoodleScraper.initialized) {
+          window.postMessage(
+            {
+              action: "moodlePageCheckResult",
+              isMoodlePage: false,
+              error: "Failed to initialize scraper",
+            },
+            "*"
+          );
+        }
+      }, 5000);
+    })
+    .catch((error) => {
+      console.error("Error injecting Moodle scraper script:", error);
+      window.postMessage(
+        {
+          action: "moodlePageCheckResult",
+          isMoodlePage: false,
+          error: "Failed to inject scraper",
+        },
+        "*"
+      );
+    });
+}
+
+/**
+ * Start the scraping process for the current Moodle page
+ */
+function startScraping() {
+  // Inject the Moodle scraper script if not already present
+  injectMoodleScraperScript()
+    .then(() => {
+      // Wait for scraper to initialize
+      const checkScraperReady = setInterval(() => {
+        if (window.MoodleScraper && window.MoodleScraper.initialized) {
+          clearInterval(checkScraperReady);
+
+          // Start scraping
+          window.MoodleScraper.startScraping()
+            .then((result) => {
+              // Send result back to iframe
+              window.postMessage(
+                {
+                  action: "scrapingStartResult",
+                  success: result.success,
+                  taskId: result.taskId,
+                  moduleCode: result.moduleCode,
+                  moduleName: result.moduleName,
+                  error: result.error,
+                },
+                "*"
+              );
+            })
+            .catch((error) => {
+              console.error("Error starting scraping:", error);
+              window.postMessage(
+                {
+                  action: "scrapingStartResult",
+                  success: false,
+                  error: error.message || "Failed to start scraping",
+                },
+                "*"
+              );
+            });
+        }
+      }, 100);
+
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkScraperReady);
+        // Send failure response if scraper didn't initialize
+        if (!window.MoodleScraper || !window.MoodleScraper.initialized) {
+          window.postMessage(
+            {
+              action: "scrapingStartResult",
+              success: false,
+              error: "Failed to initialize scraper",
+            },
+            "*"
+          );
+        }
+      }, 5000);
+    })
+    .catch((error) => {
+      console.error("Error injecting Moodle scraper script:", error);
+      window.postMessage(
+        {
+          action: "scrapingStartResult",
+          success: false,
+          error: "Failed to inject scraper",
+        },
+        "*"
+      );
+    });
+}
+
+/**
+ * Inject the Moodle scraper script into the page if not already present
+ */
+function injectMoodleScraperScript() {
+  return new Promise((resolve, reject) => {
+    // Check if scraper is already injected
+    if (window.MoodleScraper) {
+      resolve();
+      return;
+    }
+
+    // Get the script URL
+    const scriptURL = chrome.runtime.getURL("content/moodle_scraper.js");
+
+    // Create script element
+    const script = document.createElement("script");
+    script.src = scriptURL;
+    script.onload = () => {
+      console.log("Moodle scraper script loaded");
+      // Initialize scraper (give it a little time to set up)
+      setTimeout(() => {
+        if (window.MoodleScraper) {
+          window.MoodleScraper.initialize()
+            .then(() => resolve())
+            .catch(reject);
+        } else {
+          reject(new Error("Moodle scraper not found after injection"));
+        }
+      }, 100);
+    };
+    script.onerror = () =>
+      reject(new Error("Failed to load Moodle scraper script"));
+
+    // Add to page
+    document.head.appendChild(script);
+  });
+}
+
 // Initialize the panel
 function initialize() {
   // Create the panel
@@ -688,6 +874,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     sendResponse({ success: true });
+  } else if (message.action === "checkMoodlePage") {
+    // New handler for checking if current page is a Moodle course page
+    checkMoodlePage();
+    // This will be async, so we'll send the response via postMessage
+    sendResponse({ received: true });
+  } else if (message.action === "startScraping") {
+    // New handler for starting the scraping process
+    startScraping();
+    // This will be async, so we'll send the response via postMessage
+    sendResponse({ received: true });
   }
   return true;
+});
+
+// Add forward of window messages to the iframe
+window.addEventListener("message", (event) => {
+  // Make sure message is from our window (the content script context)
+  if (event.source === window) {
+    const data = event.data;
+
+    // Forward specific messages to the iframe
+    if (
+      data.action === "moodlePageCheckResult" ||
+      data.action === "scrapingStartResult"
+    ) {
+      if (panelFrame) {
+        // Forward the message to the iframe
+        const frameWindow = panelFrame.contentWindow;
+        if (frameWindow) {
+          frameWindow.postMessage(data, "*");
+        }
+      }
+    }
+  }
 });

@@ -43,11 +43,12 @@ chrome.action.onClicked.addListener(async (tab) => {
     }
 
     // Check if current tab has BLOOM panel
-    const [response] = await chrome.tabs
+
+    const response = await chrome.tabs
       .sendMessage(tab.id, {
         action: "checkPanel",
       })
-      .catch(() => [{ exists: false }]);
+      .catch(() => ({ exists: false }));
 
     if (response && response.exists) {
       // If panel exists, toggle its visibility
@@ -112,6 +113,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  // New handler for Moodle page checking
+  if (message.action === "checkMoodlePage") {
+    // Forward to content script
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0) {
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          { action: "checkMoodlePage" },
+          (response) => {
+            // Forward response back
+            sendResponse(response);
+          }
+        );
+      } else {
+        sendResponse({ isMoodlePage: false, error: "No active tab" });
+      }
+    });
+    return true; // Indicates async response
+  }
+
+  // New handler for starting scraping
+  if (message.action === "startScraping") {
+    // Forward to content script
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0) {
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          { action: "startScraping" },
+          (response) => {
+            // Forward response back
+            sendResponse(response);
+          }
+        );
+      } else {
+        sendResponse({ success: false, error: "No active tab" });
+      }
+    });
+    return true; // Indicates async response
+  }
 });
 
 // Handle commands (keyboard shortcuts)
@@ -149,4 +190,26 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Search in BLOOM",
     contexts: ["selection"],
   });
+});
+
+// Add a new onUpdated listener to check for Moodle pages on navigation
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Check if the page has finished loading
+  if (changeInfo.status === "complete" && tab.url) {
+    // Check if it's a Moodle page
+    if (
+      tab.url.includes("mdx.mrooms.net") &&
+      tab.url.includes("/course/view.php")
+    ) {
+      // Inject content script if not already present
+      chrome.scripting
+        .executeScript({
+          target: { tabId: tabId },
+          files: ["content/content.js"],
+        })
+        .catch((error) => {
+          console.error("Error injecting content script:", error);
+        });
+    }
+  }
 });

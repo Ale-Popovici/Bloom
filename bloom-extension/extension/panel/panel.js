@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const sourcePreview = document.querySelector(".bloom-source-preview");
   const sourcesContainer = document.getElementById("bloom-sources");
   const hideSourcesBtn = document.getElementById("hide-sources-btn");
+  const moduleSelect = document.getElementById("module-select");
 
   // State
   let currentTab = "chat";
@@ -31,6 +32,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let sessionId = generateSessionId();
   let showingSources = false;
   let latestSources = [];
+  let currentModule = ""; // For tracking selected module
 
   // Initialize
   function initialize() {
@@ -49,6 +51,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Load documents
     loadDocuments();
+
+    // Load available modules for the dropdown
+    loadModules();
   }
 
   // Load documents from storage
@@ -60,32 +65,64 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         // Show empty state
         documentList.innerHTML = `
+              <div class="bloom-empty-state">
+                <div class="bloom-empty-icon">📄</div>
+                <p>No documents yet</p>
+                <p class="bloom-empty-subtitle">Upload course materials to get started</p>
+              </div>
+            `;
+      }
+    });
+  }
+
+  // Load available modules
+  async function loadModules() {
+    try {
+      const response = await fetch(`${apiUrl}/chat/modules`);
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Clear existing options (except the default one)
+      while (moduleSelect.options.length > 1) {
+        moduleSelect.remove(1);
+      }
+
+      // Add module options to the dropdown
+      if (data.modules && data.modules.length > 0) {
+        data.modules.forEach((module) => {
+          const option = document.createElement("option");
+          option.value = module.code;
+          option.textContent = module.code;
+          moduleSelect.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.error("Error loading modules:", error);
+    }
+  }
+
+  // Render documents in the list
+  function renderDocuments(filteredDocs = null) {
+    const docsToRender = filteredDocs || documents;
+
+    if (docsToRender.length === 0) {
+      documentList.innerHTML = `
             <div class="bloom-empty-state">
               <div class="bloom-empty-icon">📄</div>
               <p>No documents yet</p>
               <p class="bloom-empty-subtitle">Upload course materials to get started</p>
             </div>
           `;
-      }
-    });
-  }
-
-  // Render documents in the list
-  function renderDocuments() {
-    if (documents.length === 0) {
-      documentList.innerHTML = `
-          <div class="bloom-empty-state">
-            <div class="bloom-empty-icon">📄</div>
-            <p>No documents yet</p>
-            <p class="bloom-empty-subtitle">Upload course materials to get started</p>
-          </div>
-        `;
       return;
     }
 
     documentList.innerHTML = "";
 
-    documents.forEach((doc) => {
+    docsToRender.forEach((doc) => {
       const docElement = document.createElement("div");
       docElement.className = "bloom-document";
 
@@ -94,19 +131,19 @@ document.addEventListener("DOMContentLoaded", function () {
         date.toLocaleDateString() + " " + date.toLocaleTimeString();
 
       docElement.innerHTML = `
-          <div class="bloom-document-info">
-            <div class="bloom-document-name">${doc.name}</div>
-            <div class="bloom-document-meta">Added: ${formattedDate}</div>
-          </div>
-          <div class="bloom-document-actions">
-            <button class="bloom-btn bloom-icon-btn bloom-secondary-btn bloom-delete-doc" data-id="${doc.id}" title="Delete Document">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
-        `;
+            <div class="bloom-document-info">
+              <div class="bloom-document-name">${doc.name}</div>
+              <div class="bloom-document-meta">Added: ${formattedDate}</div>
+            </div>
+            <div class="bloom-document-actions">
+              <button class="bloom-btn bloom-icon-btn bloom-secondary-btn bloom-delete-doc" data-id="${doc.id}" title="Delete Document">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          `;
 
       documentList.appendChild(docElement);
     });
@@ -223,7 +260,7 @@ document.addEventListener("DOMContentLoaded", function () {
     scrollToBottom();
 
     try {
-      // Send request to API
+      // Send request to API with the selected module
       const response = await fetch(`${apiUrl}/chat`, {
         method: "POST",
         headers: {
@@ -232,6 +269,7 @@ document.addEventListener("DOMContentLoaded", function () {
         body: JSON.stringify({
           query: message,
           session_id: sessionId,
+          module_code: currentModule, // Include the selected module
         }),
       });
 
@@ -282,13 +320,14 @@ document.addEventListener("DOMContentLoaded", function () {
       // Find document name from ID
       const document = documents.find((doc) => doc.id === source.document_id);
       const documentName = document ? document.name : "Unknown document";
+      const moduleInfo = source.module_code ? ` (${source.module_code})` : "";
 
       sourceDiv.innerHTML = `
-          <div class="bloom-source-title">${documentName}</div>
-          <div class="bloom-source-text">Relevance: ${Math.round(
-            (1 - source.relevance) * 100
-          )}%</div>
-        `;
+            <div class="bloom-source-title">${documentName}${moduleInfo}</div>
+            <div class="bloom-source-text">Relevance: ${Math.round(
+              (1 - source.relevance) * 100
+            )}%</div>
+          `;
 
       sourcesContainer.appendChild(sourceDiv);
     });
@@ -301,17 +340,17 @@ document.addEventListener("DOMContentLoaded", function () {
     if (showingSources) {
       sourcePreview.classList.add("bloom-active");
       hideSourcesBtn.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M18 15L12 9L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        `;
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 15L12 9L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          `;
     } else {
       sourcePreview.classList.remove("bloom-active");
       hideSourcesBtn.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        `;
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          `;
     }
   }
 
@@ -339,6 +378,11 @@ document.addEventListener("DOMContentLoaded", function () {
       const formData = new FormData();
       formData.append("file", file);
 
+      // Add module code if one is selected
+      if (currentModule) {
+        formData.append("module_code", currentModule);
+      }
+
       try {
         // Upload file
         const response = await fetch(`${apiUrl}/documents/upload`, {
@@ -350,8 +394,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (response.ok) {
           // Add success message
+          const moduleInfo = data.module_code
+            ? ` to module ${data.module_code}`
+            : "";
           addBotMessage(
-            `Successfully processed ${file.name}. What would you like to know about it?`
+            `Successfully processed ${file.name}${moduleInfo}. What would you like to know about it?`
           );
 
           // Add to documents list
@@ -359,6 +406,7 @@ document.addEventListener("DOMContentLoaded", function () {
             id: data.document_id,
             name: file.name,
             timestamp: new Date().toISOString(),
+            module_code: data.module_code,
           };
 
           documents.push(newDoc);
@@ -366,6 +414,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
           // Update documents tab
           renderDocuments();
+
+          // Refresh module dropdown as new modules might have been created
+          loadModules();
         } else {
           // Add error message
           addBotMessage(
@@ -389,6 +440,31 @@ document.addEventListener("DOMContentLoaded", function () {
   // Tab switching
   chatTab.addEventListener("click", () => switchTab("chat"));
   docsTab.addEventListener("click", () => switchTab("documents"));
+
+  // Module dropdown
+  moduleSelect.addEventListener("change", () => {
+    currentModule = moduleSelect.value;
+    // Add a helper message to indicate module switch
+    if (currentModule) {
+      addBotMessage(
+        `Switched to module ${currentModule}. You can now ask questions about this module's content.`
+      );
+    } else {
+      addBotMessage(
+        "Switched to all documents mode. You can ask about any document in the system."
+      );
+    }
+
+    // Filter documents list if in documents tab
+    if (currentTab === "documents" && currentModule) {
+      const filteredDocs = documents.filter(
+        (doc) => doc.module_code === currentModule
+      );
+      renderDocuments(filteredDocs);
+    } else if (currentTab === "documents") {
+      renderDocuments();
+    }
+  });
 
   // Send message
   sendBtn.addEventListener("click", sendMessage);
