@@ -487,3 +487,115 @@
       max-width: 100%;
     }
   }
+
+  /* Markdown styling for chat messages */
+.bloom-message pre {
+  background-color: #f4f4f4;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 0.85em;
+  max-width: 100%;
+}
+
+.bloom-message code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background-color: #f4f4f4;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  color: #333;
+}
+
+.bloom-message ul, 
+.bloom-message ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.bloom-message li {
+  margin-bottom: 4px;
+}
+
+.bloom-message p {
+  margin-bottom: 8px;
+}
+
+.bloom-message p:last-child {
+  margin-bottom: 0;
+}
+
+.bloom-message a {
+  color: var(--mdx-red);
+  text-decoration: underline;
+}
+
+.bloom-message a:hover {
+  text-decoration: none;
+}
+
+.bloom-message strong {
+  font-weight: bold;
+}
+
+.bloom-message em {
+  font-style: italic;
+}
+
+/* Typing indicator animation */
+.bloom-thinking {
+  display: flex;
+  align-items: center;
+}
+
+.bloom-ellipsis span {
+  opacity: 0;
+  animation: bloomDot 1.4s infinite;
+  margin-left: 2px;
+}
+
+.bloom-ellipsis span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.bloom-ellipsis span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.bloom-ellipsis span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes bloomDot {
+  0%, 60%, 100% { opacity: 0; }
+  30% { opacity: 1; }
+}
+
+/* Streaming animation - subtle highlight while text is still being typed */
+@keyframes streamingHighlight {
+  0%, 100% { border-left-color: var(--bloom-purple); }
+  50% { border-left-color: var(--mdx-red); }
+}
+
+.bloom-bot-message.streaming {
+  animation: streamingHighlight 1.5s infinite;
+  border-left: 3px solid var(--bloom-purple);
+}
+
+/* Additional style for the cursor effect while streaming */
+.bloom-bot-message.streaming::after {
+  content: '|';
+  display: inline-block;
+  opacity: 1;
+  animation: cursorBlink 1s infinite;
+  margin-left: 1px;
+  color: var(--mdx-red);
+  font-weight: normal;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

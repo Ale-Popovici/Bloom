@@ -33,6 +33,165 @@ document.addEventListener("DOMContentLoaded", function () {
   let showingSources = false;
   let latestSources = [];
   let currentModule = ""; // For tracking selected module
+  let streamingMessageElement = null; // To track the currently streaming message
+  let streamingFullText = ""; // Buffer for the full text being streamed
+
+  // Helper function to escape HTML in code blocks
+  function escapeHTML(text) {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // Markdown parser function with improved handling for partial content
+  function parseMarkdown(text) {
+    if (!text) return "";
+
+    // Handle code blocks with ```
+    text = text.replace(/```([\s\S]*?)```/g, function (match, code) {
+      return "<pre><code>" + escapeHTML(code) + "</code></pre>";
+    });
+
+    // Handle inline code with backticks - prevent parsing markdown inside code
+    text = text.replace(/`([^`]+)`/g, function (match, code) {
+      return "<code>" + escapeHTML(code) + "</code>";
+    });
+
+    // Handle bold
+    text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+    // Handle italic
+    text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+
+    // Handle links
+    text = text.replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" target="_blank">$1</a>'
+    );
+
+    // Handle unordered lists - more careful handling for partial content
+    let lines = text.split("\n");
+    let inList = false;
+    let listBuffer = "";
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().match(/^-\s+(.+)$/)) {
+        if (!inList) {
+          // Start a new list
+          inList = true;
+          listBuffer = "<ul>";
+        }
+
+        // Add this list item
+        listBuffer +=
+          "<li>" + lines[i].trim().replace(/^-\s+(.+)$/, "$1") + "</li>";
+        lines[i] = "";
+      } else if (inList && lines[i].trim() === "") {
+        // Empty line after list - close the list
+        listBuffer += "</ul>";
+        lines[i] = listBuffer;
+        listBuffer = "";
+        inList = false;
+      }
+    }
+
+    // If we're still in a list at the end, close it
+    if (inList) {
+      listBuffer += "</ul>";
+      lines.push(listBuffer);
+    }
+
+    // Reassemble lines
+    text = lines.filter((line) => line !== "").join("\n");
+
+    // Handle ordered lists
+    lines = text.split("\n");
+    inList = false;
+    listBuffer = "";
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().match(/^\d+\.\s+(.+)$/)) {
+        if (!inList) {
+          // Start a new list
+          inList = true;
+          listBuffer = "<ol>";
+        }
+
+        // Add this list item
+        listBuffer +=
+          "<li>" + lines[i].trim().replace(/^\d+\.\s+(.+)$/, "$1") + "</li>";
+        lines[i] = "";
+      } else if (inList && lines[i].trim() === "") {
+        // Empty line after list - close the list
+        listBuffer += "</ol>";
+        lines[i] = listBuffer;
+        listBuffer = "";
+        inList = false;
+      }
+    }
+
+    // If we're still in a list at the end, close it
+    if (inList) {
+      listBuffer += "</ol>";
+      lines.push(listBuffer);
+    }
+
+    // Reassemble lines
+    text = lines.filter((line) => line !== "").join("\n");
+
+    // Handle paragraphs - if content is partial, this might not work perfectly
+    // but it will continuously improve as more content arrives
+    let paragraphs = text.split(/\n\n+/);
+    if (paragraphs.length > 1) {
+      text = paragraphs.map((p) => (p.trim() ? `<p>${p}</p>` : "")).join("");
+    } else {
+      // Single paragraph - handle newlines as line breaks
+      text = `<p>${text.replace(/\n/g, "<br>")}</p>`;
+    }
+
+    return text;
+  }
+
+  // Stream message function with real-time Markdown rendering
+  function streamMessage(element, text, index = 0, chunkSize = 4) {
+    streamingMessageElement = element; // Track current streaming element
+
+    if (index >= text.length) {
+      // Done streaming, ensure final render is complete
+      element.classList.remove("streaming");
+      streamingMessageElement = null; // Clear tracking
+      streamingFullText = ""; // Reset the buffer
+      return;
+    }
+
+    // Add the next chunk to our buffer
+    const chunk = text.substring(index, index + chunkSize);
+    streamingFullText += chunk;
+
+    // Apply markdown to the entire text buffer and update the element
+    element.innerHTML = parseMarkdown(streamingFullText);
+
+    // Add the streaming class for subtle animation
+    element.classList.add("streaming");
+
+    // Auto-scroll to the bottom while streaming
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Schedule the next chunk with a small delay
+    setTimeout(() => {
+      streamMessage(element, text, index + chunkSize, chunkSize);
+    }, 15); // Slightly longer delay to ensure smooth rendering
+
+    // If we're on the last chunk, remove the streaming animation class
+    if (index + chunkSize >= text.length) {
+      setTimeout(() => {
+        element.classList.remove("streaming");
+      }, 300);
+    }
+  }
 
   // Initialize
   function initialize() {
@@ -65,12 +224,12 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         // Show empty state
         documentList.innerHTML = `
-              <div class="bloom-empty-state">
-                <div class="bloom-empty-icon">📄</div>
-                <p>No documents yet</p>
-                <p class="bloom-empty-subtitle">Upload course materials to get started</p>
-              </div>
-            `;
+                <div class="bloom-empty-state">
+                  <div class="bloom-empty-icon">📄</div>
+                  <p>No documents yet</p>
+                  <p class="bloom-empty-subtitle">Upload course materials to get started</p>
+                </div>
+              `;
       }
     });
   }
@@ -111,12 +270,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (docsToRender.length === 0) {
       documentList.innerHTML = `
-            <div class="bloom-empty-state">
-              <div class="bloom-empty-icon">📄</div>
-              <p>No documents yet</p>
-              <p class="bloom-empty-subtitle">Upload course materials to get started</p>
-            </div>
-          `;
+              <div class="bloom-empty-state">
+                <div class="bloom-empty-icon">📄</div>
+                <p>No documents yet</p>
+                <p class="bloom-empty-subtitle">Upload course materials to get started</p>
+              </div>
+            `;
       return;
     }
 
@@ -131,19 +290,19 @@ document.addEventListener("DOMContentLoaded", function () {
         date.toLocaleDateString() + " " + date.toLocaleTimeString();
 
       docElement.innerHTML = `
-            <div class="bloom-document-info">
-              <div class="bloom-document-name">${doc.name}</div>
-              <div class="bloom-document-meta">Added: ${formattedDate}</div>
-            </div>
-            <div class="bloom-document-actions">
-              <button class="bloom-btn bloom-icon-btn bloom-secondary-btn bloom-delete-doc" data-id="${doc.id}" title="Delete Document">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-            </div>
-          `;
+              <div class="bloom-document-info">
+                <div class="bloom-document-name">${doc.name}</div>
+                <div class="bloom-document-meta">Added: ${formattedDate}</div>
+              </div>
+              <div class="bloom-document-actions">
+                <button class="bloom-btn bloom-icon-btn bloom-secondary-btn bloom-delete-doc" data-id="${doc.id}" title="Delete Document">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            `;
 
       documentList.appendChild(docElement);
     });
@@ -218,20 +377,31 @@ document.addEventListener("DOMContentLoaded", function () {
   function addUserMessage(text) {
     const messageDiv = document.createElement("div");
     messageDiv.className = "bloom-message bloom-user-message";
-    messageDiv.textContent = text;
+    // Apply Markdown formatting immediately for user messages
+    messageDiv.innerHTML = parseMarkdown(text);
 
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
   }
 
-  // Add a bot message to the chat
+  // Add a bot message to the chat with real-time Markdown streaming
   function addBotMessage(text) {
+    // If there's already a message streaming, complete it immediately
+    if (streamingMessageElement) {
+      streamingMessageElement.innerHTML = parseMarkdown(streamingFullText);
+      streamingMessageElement.classList.remove("streaming");
+      streamingMessageElement = null;
+      streamingFullText = "";
+    }
+
     const messageDiv = document.createElement("div");
     messageDiv.className = "bloom-message bloom-bot-message";
-    messageDiv.textContent = text;
 
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
+
+    // Start streaming the message with real-time Markdown rendering
+    streamMessage(messageDiv, text);
   }
 
   // Scroll chat to bottom
@@ -279,7 +449,7 @@ document.addEventListener("DOMContentLoaded", function () {
       messagesContainer.removeChild(thinkingDiv);
 
       if (response.ok) {
-        // Add bot response
+        // Add bot response with real-time Markdown streaming
         addBotMessage(data.response);
 
         // Store sources
@@ -323,11 +493,11 @@ document.addEventListener("DOMContentLoaded", function () {
       const moduleInfo = source.module_code ? ` (${source.module_code})` : "";
 
       sourceDiv.innerHTML = `
-            <div class="bloom-source-title">${documentName}${moduleInfo}</div>
-            <div class="bloom-source-text">Relevance: ${Math.round(
-              (1 - source.relevance) * 100
-            )}%</div>
-          `;
+              <div class="bloom-source-title">${documentName}${moduleInfo}</div>
+              <div class="bloom-source-text">Relevance: ${Math.round(
+                (1 - source.relevance) * 100
+              )}%</div>
+            `;
 
       sourcesContainer.appendChild(sourceDiv);
     });
@@ -340,17 +510,17 @@ document.addEventListener("DOMContentLoaded", function () {
     if (showingSources) {
       sourcePreview.classList.add("bloom-active");
       hideSourcesBtn.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M18 15L12 9L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          `;
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 15L12 9L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            `;
     } else {
       sourcePreview.classList.remove("bloom-active");
       hideSourcesBtn.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          `;
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            `;
     }
   }
 

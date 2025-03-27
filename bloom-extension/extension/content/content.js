@@ -424,7 +424,7 @@ async function sendMessage(message) {
     sendToFrame("hideThinking");
 
     if (response.ok) {
-      // Add bot response
+      // Add bot response - will be streamed in the panel
       addBotMessage(result.response);
     } else {
       // Add error message
