@@ -16,6 +16,7 @@ export class SpeechService {
     this.onError = null;
     this.speechConfig = null;
     this.initialized = false;
+    this.microphonePermissionGranted = false;
   }
 
   /**
@@ -24,13 +25,31 @@ export class SpeechService {
   async initialize() {
     // Check if SDK is loaded
     if (!window.SpeechSDK) {
-      throw new Error(
-        "Microsoft Speech SDK not found. Make sure it's properly loaded."
+      console.warn(
+        "Microsoft Speech SDK not detected, attempting to load dynamically..."
       );
+      try {
+        await this.loadSpeechSDK();
+      } catch (error) {
+        throw new Error(
+          "Failed to load Microsoft Speech SDK: " + error.message
+        );
+      }
     }
 
     try {
-      // Get speech token (in this case, just using the config key)
+      // Validate Azure configuration
+      if (
+        !AzureConfig.speechKey ||
+        AzureConfig.speechKey.includes("Replace with your key") ||
+        AzureConfig.speechKey.length < 10
+      ) {
+        throw new Error(
+          "Invalid Azure Speech API key. Please configure a valid key in azure-config.js"
+        );
+      }
+
+      // Get speech token
       const { authToken, region } = await getSpeechToken();
 
       // Create speech config
@@ -57,6 +76,55 @@ export class SpeechService {
   }
 
   /**
+   * Load the Microsoft Speech SDK dynamically
+   */
+  loadSpeechSDK() {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src =
+        "https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js";
+      script.onload = () => {
+        console.log("Microsoft Speech SDK loaded successfully");
+        resolve();
+      };
+      script.onerror = () =>
+        reject(new Error("Failed to load Microsoft Speech SDK"));
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * Request microphone permission
+   */
+  async requestMicrophonePermission() {
+    try {
+      // This will trigger the browser permission dialog
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // If we get here, permission was granted - store the stream for cleanup
+      this.microphoneStream = stream;
+      this.microphonePermissionGranted = true;
+
+      return true;
+    } catch (error) {
+      console.error("Microphone permission denied:", error);
+      this.microphonePermissionGranted = false;
+
+      if (error.name === "NotAllowedError") {
+        throw new Error(
+          "Microphone access was denied. Please allow microphone access to use voice features."
+        );
+      } else if (error.name === "NotFoundError") {
+        throw new Error(
+          "No microphone detected. Please connect a microphone and try again."
+        );
+      } else {
+        throw new Error("Microphone error: " + error.message);
+      }
+    }
+  }
+
+  /**
    * Start speech recognition
    */
   async startRecognition() {
@@ -69,6 +137,11 @@ export class SpeechService {
     }
 
     try {
+      // Request microphone permission if not already granted
+      if (!this.microphonePermissionGranted) {
+        await this.requestMicrophonePermission();
+      }
+
       // Create audio config for microphone
       const audioConfig =
         window.SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
@@ -297,7 +370,14 @@ export class SpeechService {
       this.speechSynthesizer = null;
     }
 
+    // Release microphone stream if we have one
+    if (this.microphoneStream) {
+      this.microphoneStream.getTracks().forEach((track) => track.stop());
+      this.microphoneStream = null;
+    }
+
     this.isRecording = false;
     this.isSpeaking = false;
+    this.microphonePermissionGranted = false;
   }
 }
