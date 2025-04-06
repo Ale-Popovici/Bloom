@@ -197,11 +197,11 @@ function parseMarkdown(text) {
     text = text.replace(/\|\|FOOTNOTE_CITATION_(\d+)\|\|/g, function (_m, idx) {
       const i = parseInt(idx, 10);
       footnotesList += `
-            <div class="bloom-footnote-item">
-              <span class="bloom-footnote-number">[${i + 1}]</span>
-              <div>${citations[i]}</div>
-            </div>
-          `;
+              <div class="bloom-footnote-item">
+                <span class="bloom-footnote-number">[${i + 1}]</span>
+                <div>${citations[i]}</div>
+              </div>
+            `;
       finalIndex++;
       // Return a small marker in the text - modified to not add duplicate numbers
       return `<span class="bloom-footnote-citation">[${i + 1}]</span>`;
@@ -214,6 +214,27 @@ function parseMarkdown(text) {
   }
 
   return text;
+}
+
+// Function to detect and format agent responses
+function formatAgentResponse(text) {
+  // Check if this is an agent response (starts with the agent tag)
+  if (text.startsWith("[BLOOM Agent")) {
+    const titleEndIndex = text.indexOf("]\n\n");
+    if (titleEndIndex > 0) {
+      const agentTitle = text.substring(0, titleEndIndex + 1);
+      const agentContent = text.substring(titleEndIndex + 3);
+
+      // Format with special styling for agent responses
+      return `<div class="bloom-agent-header">${agentTitle}</div>
+                <div class="bloom-agent-content">${parseMarkdown(
+                  agentContent
+                )}</div>`;
+    }
+  }
+
+  // Regular message - use normal markdown parsing
+  return parseMarkdown(text);
 }
 
 // ------------------------------------------------------------------
@@ -254,6 +275,80 @@ function streamMessage(element, text, index = 0, chunkSize = 4) {
       element.classList.remove("streaming");
     }, 300);
   }
+}
+
+// Add agent action suggestions beneath the chat input
+function addAgentSuggestions() {
+  // Check if suggestions already exist
+  if (document.querySelector(".bloom-agent-suggestions")) {
+    return;
+  }
+
+  const messagesContainer = document.getElementById("bloom-chat-messages");
+  const inputArea = document.querySelector(".bloom-input-area");
+
+  // Create suggestion container
+  const suggestionsDiv = document.createElement("div");
+  suggestionsDiv.className = "bloom-agent-suggestions";
+  suggestionsDiv.innerHTML = "<span>Try agent actions: </span>";
+
+  // Add suggestion buttons
+  const suggestions = [
+    "Summarize this document",
+    "Extract key points from these materials",
+    "Create a study guide for this topic",
+    "Compare these documents",
+  ];
+
+  suggestions.forEach((suggestion) => {
+    const button = document.createElement("span");
+    button.className = "bloom-agent-suggestion";
+    button.textContent = suggestion;
+    button.addEventListener("click", () => {
+      // Set the suggestion as input text
+      document.getElementById("bloom-user-input").value = suggestion;
+      // Focus the input
+      document.getElementById("bloom-user-input").focus();
+    });
+
+    suggestionsDiv.appendChild(button);
+  });
+
+  // Insert before the input container
+  if (inputArea && inputArea.parentNode) {
+    inputArea.parentNode.insertBefore(suggestionsDiv, inputArea);
+  }
+}
+
+// Modified function to handle both regular and agent messages
+function addMessage(role, text) {
+  // If there's already a message streaming, finalize it first
+  if (streamingMessageElement) {
+    streamingMessageElement.innerHTML = parseMarkdown(streamingFullText);
+    streamingMessageElement.classList.remove("streaming");
+    streamingMessageElement = null;
+    streamingFullText = "";
+  }
+
+  const messageDiv = document.createElement("div");
+  messageDiv.className = `bloom-message bloom-${role}-message`;
+
+  if (role === "bot" && text.startsWith("[BLOOM Agent")) {
+    // For agent messages, add special class and don't stream
+    messageDiv.classList.add("bloom-agent-message");
+    messageDiv.innerHTML = formatAgentResponse(text);
+    messagesContainer.appendChild(messageDiv);
+  } else if (role === "bot") {
+    // Regular bot message - use streaming
+    messagesContainer.appendChild(messageDiv);
+    streamMessage(messageDiv, text);
+  } else {
+    // User message - immediate render
+    messageDiv.innerHTML = parseMarkdown(text);
+    messagesContainer.appendChild(messageDiv);
+  }
+
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 // Event listeners
@@ -333,31 +428,6 @@ window.addEventListener("message", (event) => {
   }
 });
 
-// Add message to chat with real-time Markdown streaming for bot
-function addMessage(role, text) {
-  // If there's already a message streaming, finalize it first
-  if (streamingMessageElement) {
-    streamingMessageElement.innerHTML = parseMarkdown(streamingFullText);
-    streamingMessageElement.classList.remove("streaming");
-    streamingMessageElement = null;
-    streamingFullText = "";
-  }
-
-  const messageDiv = document.createElement("div");
-  messageDiv.className = `bloom-message bloom-${role}-message`;
-  messagesContainer.appendChild(messageDiv);
-
-  if (role === "bot") {
-    // Stream bot messages
-    streamMessage(messageDiv, text);
-  } else {
-    // Immediate render for user messages
-    messageDiv.innerHTML = parseMarkdown(text);
-  }
-
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
 // Show thinking indicator
 function showThinking() {
   // Remove any existing thinking indicator first
@@ -406,5 +476,9 @@ function updateModuleDropdown(modules) {
 
 // Initialize: tell parent window we're ready
 window.addEventListener("DOMContentLoaded", () => {
+  // Add agent suggestions
+  addAgentSuggestions();
+
+  // Tell parent we're ready
   sendToParent("panelReady");
 });

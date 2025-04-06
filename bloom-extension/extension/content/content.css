@@ -447,3 +447,70 @@ body {
   gap: 12px;
   border-top: 1px solid var(--border-color);
 }
+
+/* Agent response styling */
+.bloom-agent-message {
+  border-left: 3px solid #9146ff !important;
+  background-color: rgba(145, 70, 255, 0.1) !important;
+}
+
+.bloom-agent-header {
+  font-weight: bold;
+  color: #9146ff;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(145, 70, 255, 0.3);
+}
+
+.bloom-agent-content {
+  /* Uses existing markdown styling */
+}
+
+/* Agent action indicators */
+.bloom-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.bloom-action-button {
+  background-color: rgba(145, 70, 255, 0.1);
+  border: 1px solid #9146ff;
+  color: #9146ff;
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bloom-action-button:hover {
+  background-color: rgba(145, 70, 255, 0.2);
+}
+
+/* Agent action suggestions */
+.bloom-agent-suggestions {
+  margin-top: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #666;
+  border-top: 1px solid #eee;
+}
+
+.bloom-agent-suggestion {
+  display: inline-block;
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  padding: 4px 12px;
+  margin: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bloom-agent-suggestion:hover {
+  background-color: #e9ddff;
+  border-color: #9146ff;
+  color: #9146ff;
+}

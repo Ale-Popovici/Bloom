@@ -53,7 +53,8 @@ async def chat(query: ChatQuery):
         logger.info(f"Found {len(results)} relevant chunks for query")
 
         # Generate response using OpenAI with session tracking
-        response = generate_response(query.query, results, query.session_id)
+        # FIX: Add 'await' here to properly await the coroutine
+        response = await generate_response(query.query, results, query.session_id)
 
         # Format sources for the response
         sources = []

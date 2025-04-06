@@ -1,6 +1,7 @@
 import openai
 from config import OPENAI_API_KEY, CHAT_MODEL
 import logging
+from bloom_agent import BloomAgent  # Import the agent module
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +22,14 @@ conversation_history = {
     # }
 }
 
+# Initialize agent instances
+active_agents = {}
 
-def generate_response(query, relevant_chunks, session_id="default"):
+
+async def generate_response(query, relevant_chunks, session_id="default"):
     """
-    Generate a response using GPT-4o based on the query, relevant document chunks,
-    and conversation history.
+    Generate a response using GPT-4o or the BloomAgent based on the query,
+    relevant document chunks, and conversation history.
 
     Args:
         query (str): The user's query
@@ -41,6 +45,57 @@ def generate_response(query, relevant_chunks, session_id="default"):
     # Extract document IDs from the chunks for tracking purposes
     document_ids = list(set([chunk["metadata"]["document_id"]
                         for chunk in relevant_chunks if "metadata" in chunk and "document_id" in chunk["metadata"]]))
+
+    # Initialize agent if needed
+    if session_id not in active_agents:
+        active_agents[session_id] = BloomAgent(session_id)
+
+    # Check if this is an agent action request
+    try:
+        # FIX: Add 'await' here to properly await the coroutine
+        agent_response = await active_agents[session_id].process_request(query, relevant_chunks)
+        if agent_response:
+            # Add to conversation history
+            if session_id not in conversation_history:
+                logger.info(
+                    f"Creating new conversation history for session: {session_id}")
+                conversation_history[session_id] = {
+                    "messages": [],
+                    "document_ids": []
+                }
+
+            # Update document IDs for this session
+            for doc_id in document_ids:
+                if doc_id not in conversation_history[session_id]["document_ids"]:
+                    conversation_history[session_id]["document_ids"].append(
+                        doc_id)
+
+            # Initialize conversation with system message if needed
+            if not conversation_history[session_id]["messages"]:
+                conversation_history[session_id]["messages"].append(
+                    {"role": "system", "content": build_system_message()}
+                )
+
+            # Add user query and agent response to conversation history
+            conversation_history[session_id]["messages"].append(
+                {"role": "user", "content": query}
+            )
+            conversation_history[session_id]["messages"].append(
+                {"role": "assistant", "content": agent_response["response"]}
+            )
+
+            # Keep conversation history manageable
+            if len(conversation_history[session_id]["messages"]) > 41:
+                conversation_history[session_id]["messages"] = [
+                    # system message
+                    conversation_history[session_id]["messages"][0]
+                ] + conversation_history[session_id]["messages"][-40:]  # last 40 messages
+
+            # Return the agent's response
+            return f"[BLOOM Agent - {agent_response['agent_action'].replace('_', ' ').title()}]\n\n{agent_response['response']}"
+    except Exception as e:
+        logger.error(f"Error in agent processing: {str(e)}")
+        # Continue with standard response if agent processing fails
 
     # Format context from relevant chunks with metadata
     context_parts = []
@@ -72,21 +127,7 @@ def generate_response(query, relevant_chunks, session_id="default"):
             conversation_history[session_id]["document_ids"].append(doc_id)
 
     # Build system message with Middlesex University context
-    system_message = """
-    You are BLOOM, an intelligent assistant designed specifically for Middlesex University students.
-    Your purpose is to help students find and understand information in their course materials.
-    
-    When answering questions:
-    1. Draw information exclusively from the provided document excerpts
-    2. Cite the document source when providing information
-    3. If information cannot be found in the provided context, acknowledge this limitation
-    4. Keep responses concise and student-focused, emphasizing practical information
-    5. Use Middlesex University terminology when applicable
-    6. Maintain a helpful, supportive, and educational tone
-    7. Reference previous parts of the conversation when relevant to show continuity
-    
-    Approach complex topics by breaking them down into simpler components that students can understand.
-    """
+    system_message = build_system_message()
 
     # Construct conversation messages
     messages = []
@@ -115,7 +156,7 @@ def generate_response(query, relevant_chunks, session_id="default"):
 
     try:
         # Call OpenAI API with enhanced parameters for conversation memory
-        response = openai.ChatCompletion.create(
+        response = await openai.ChatCompletion.acreate(
             model=CHAT_MODEL,
             messages=messages,
             temperature=0.2,  # Lower temperature for more factual responses
@@ -147,6 +188,25 @@ def generate_response(query, relevant_chunks, session_id="default"):
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}")
         raise e
+
+
+# Helper function to build system message
+def build_system_message():
+    return """
+    You are BLOOM, an intelligent assistant designed specifically for Middlesex University students.
+    Your purpose is to help students find and understand information in their course materials.
+    
+    When answering questions:
+    1. Draw information exclusively from the provided document excerpts
+    2. Cite the document source when providing information
+    3. If information cannot be found in the provided context, acknowledge this limitation
+    4. Keep responses concise and student-focused, emphasizing practical information
+    5. Use Middlesex University terminology when applicable
+    6. Maintain a helpful, supportive, and educational tone
+    7. Reference previous parts of the conversation when relevant to show continuity
+    
+    Approach complex topics by breaking them down into simpler components that students can understand.
+    """
 
 
 def clear_conversation(session_id="default"):
