@@ -172,7 +172,7 @@ class BloomAgent:
         Guidelines for key points extraction:
         1. Identify the most important concepts, arguments, and findings
         2. Organize points by category or theme
-        3. Include source attribution for each point
+        3. Include source attribution for each point in parentheses, e.g. (filename.pdf, Chunk X)
         4. Prioritize clarity and educational value
         5. Format as a hierarchical bullet point list
         6. Include academic definitions where relevant
