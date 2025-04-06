@@ -99,6 +99,14 @@ document.addEventListener("DOMContentLoaded", function () {
       return `||FOOTNOTE_CITATION_${citationIndex++}||`;
     });
 
+    // Handle headings (h1 to h6) - HANDLE THESE FIRST BEFORE OTHER PROCESSING
+    text = text.replace(/^######\s+(.*?)$/gm, "<h6>$1</h6>");
+    text = text.replace(/^#####\s+(.*?)$/gm, "<h5>$1</h5>");
+    text = text.replace(/^####\s+(.*?)$/gm, "<h4>$1</h4>");
+    text = text.replace(/^###\s+(.*?)$/gm, "<h3>$1</h3>");
+    text = text.replace(/^##\s+(.*?)$/gm, "<h2>$1</h2>");
+    text = text.replace(/^#\s+(.*?)$/gm, "<h1>$1</h1>");
+
     // Process standard markdown
     text = text.replace(/```([\s\S]*?)```/g, function (match, code) {
       return "<pre><code>" + escapeHTML(code) + "</code></pre>";
@@ -205,9 +213,9 @@ document.addEventListener("DOMContentLoaded", function () {
       function (match, index) {
         const i = parseInt(index);
         footnotesList += `<div class="bloom-footnote-item">
-              <span class="bloom-footnote-number">[${i + 1}]</span>
-              <div>${citations[i]}</div>
-            </div>`;
+                <span class="bloom-footnote-number">[${i + 1}]</span>
+                <div>${citations[i]}</div>
+              </div>`;
         return `<span class="bloom-footnote-citation">[${i + 1}]</span>`;
       }
     );
@@ -231,9 +239,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Format with special styling for agent responses
         return `<div class="bloom-agent-header">${agentTitle}</div>
-                  <div class="bloom-agent-content">${parseMarkdown(
-                    agentContent
-                  )}</div>`;
+                    <div class="bloom-agent-content">${parseMarkdown(
+                      agentContent
+                    )}</div>`;
       }
     }
 
@@ -313,12 +321,12 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         // Show empty state
         documentList.innerHTML = `
-                    <div class="bloom-empty-state">
-                      <div class="bloom-empty-icon">📄</div>
-                      <p>No documents yet</p>
-                      <p class="bloom-empty-subtitle">Upload course materials to get started</p>
-                    </div>
-                  `;
+                      <div class="bloom-empty-state">
+                        <div class="bloom-empty-icon">📄</div>
+                        <p>No documents yet</p>
+                        <p class="bloom-empty-subtitle">Upload course materials to get started</p>
+                      </div>
+                    `;
       }
     });
   }
@@ -359,12 +367,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (docsToRender.length === 0) {
       documentList.innerHTML = `
-                  <div class="bloom-empty-state">
-                    <div class="bloom-empty-icon">📄</div>
-                    <p>No documents yet</p>
-                    <p class="bloom-empty-subtitle">Upload course materials to get started</p>
-                  </div>
-                `;
+                    <div class="bloom-empty-state">
+                      <div class="bloom-empty-icon">📄</div>
+                      <p>No documents yet</p>
+                      <p class="bloom-empty-subtitle">Upload course materials to get started</p>
+                    </div>
+                  `;
       return;
     }
 
@@ -379,19 +387,19 @@ document.addEventListener("DOMContentLoaded", function () {
         date.toLocaleDateString() + " " + date.toLocaleTimeString();
 
       docElement.innerHTML = `
-                  <div class="bloom-document-info">
-                    <div class="bloom-document-name">${doc.name}</div>
-                    <div class="bloom-document-meta">Added: ${formattedDate}</div>
-                  </div>
-                  <div class="bloom-document-actions">
-                    <button class="bloom-btn bloom-icon-btn bloom-secondary-btn bloom-delete-doc" data-id="${doc.id}" title="Delete Document">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      </svg>
-                    </button>
-                  </div>
-                `;
+                    <div class="bloom-document-info">
+                      <div class="bloom-document-name">${doc.name}</div>
+                      <div class="bloom-document-meta">Added: ${formattedDate}</div>
+                    </div>
+                    <div class="bloom-document-actions">
+                      <button class="bloom-btn bloom-icon-btn bloom-secondary-btn bloom-delete-doc" data-id="${doc.id}" title="Delete Document">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                  `;
 
       documentList.appendChild(docElement);
     });
@@ -589,11 +597,11 @@ document.addEventListener("DOMContentLoaded", function () {
       const moduleInfo = source.module_code ? ` (${source.module_code})` : "";
 
       sourceDiv.innerHTML = `
-                  <div class="bloom-source-title">${documentName}${moduleInfo}</div>
-                  <div class="bloom-source-text">Relevance: ${Math.round(
-                    (1 - source.relevance) * 100
-                  )}%</div>
-                `;
+                    <div class="bloom-source-title">${documentName}${moduleInfo}</div>
+                    <div class="bloom-source-text">Relevance: ${Math.round(
+                      (1 - source.relevance) * 100
+                    )}%</div>
+                  `;
 
       sourcesContainer.appendChild(sourceDiv);
     });
@@ -606,17 +614,17 @@ document.addEventListener("DOMContentLoaded", function () {
     if (showingSources) {
       sourcePreview.classList.add("bloom-active");
       hideSourcesBtn.innerHTML = `
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M18 15L12 9L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                `;
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M18 15L12 9L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  `;
     } else {
       sourcePreview.classList.remove("bloom-active");
       hideSourcesBtn.innerHTML = `
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                `;
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  `;
     }
   }
 

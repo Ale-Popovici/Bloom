@@ -87,7 +87,19 @@ function parseMarkdown(text) {
   });
 
   // ----------------------------------------------------------------
-  // 2) Continue with your existing Markdown transformations
+  // 2) Handle headings first (before other transformations)
+  // ----------------------------------------------------------------
+
+  // Handle headings (h1 to h6)
+  text = text.replace(/^######\s+(.*?)$/gm, "<h6>$1</h6>");
+  text = text.replace(/^#####\s+(.*?)$/gm, "<h5>$1</h5>");
+  text = text.replace(/^####\s+(.*?)$/gm, "<h4>$1</h4>");
+  text = text.replace(/^###\s+(.*?)$/gm, "<h3>$1</h3>");
+  text = text.replace(/^##\s+(.*?)$/gm, "<h2>$1</h2>");
+  text = text.replace(/^#\s+(.*?)$/gm, "<h1>$1</h1>");
+
+  // ----------------------------------------------------------------
+  // 3) Continue with your existing Markdown transformations
   // ----------------------------------------------------------------
 
   // Handle code blocks with triple backticks
@@ -113,7 +125,7 @@ function parseMarkdown(text) {
   );
 
   // ----------------------------------------------------------------
-  // 3) Handle lists more carefully to allow partial content
+  // 4) Handle lists more carefully to allow partial content
   //    (Unordered lists first)
   // ----------------------------------------------------------------
   let lines = text.split("\n");
@@ -146,7 +158,7 @@ function parseMarkdown(text) {
   text = lines.filter((line) => line !== "").join("\n");
 
   // ----------------------------------------------------------------
-  // 4) Ordered lists
+  // 5) Ordered lists
   // ----------------------------------------------------------------
   lines = text.split("\n");
   inList = false;
@@ -175,7 +187,7 @@ function parseMarkdown(text) {
   text = lines.filter((line) => line !== "").join("\n");
 
   // ----------------------------------------------------------------
-  // 5) Handle paragraphs
+  // 6) Handle paragraphs
   // ----------------------------------------------------------------
   let paragraphs = text.split(/\n\n+/);
   if (paragraphs.length > 1) {
@@ -186,7 +198,7 @@ function parseMarkdown(text) {
   }
 
   // ----------------------------------------------------------------
-  // 6) Insert footnotes at the bottom if any citations were found
+  // 7) Insert footnotes at the bottom if any citations were found
   // ----------------------------------------------------------------
   let footnotesList = "";
   if (citations.length > 0) {
@@ -197,11 +209,11 @@ function parseMarkdown(text) {
     text = text.replace(/\|\|FOOTNOTE_CITATION_(\d+)\|\|/g, function (_m, idx) {
       const i = parseInt(idx, 10);
       footnotesList += `
-              <div class="bloom-footnote-item">
-                <span class="bloom-footnote-number">[${i + 1}]</span>
-                <div>${citations[i]}</div>
-              </div>
-            `;
+                <div class="bloom-footnote-item">
+                  <span class="bloom-footnote-number">[${i + 1}]</span>
+                  <div>${citations[i]}</div>
+                </div>
+              `;
       finalIndex++;
       // Return a small marker in the text - modified to not add duplicate numbers
       return `<span class="bloom-footnote-citation">[${i + 1}]</span>`;
@@ -227,9 +239,9 @@ function formatAgentResponse(text) {
 
       // Format with special styling for agent responses
       return `<div class="bloom-agent-header">${agentTitle}</div>
-                <div class="bloom-agent-content">${parseMarkdown(
-                  agentContent
-                )}</div>`;
+                  <div class="bloom-agent-content">${parseMarkdown(
+                    agentContent
+                  )}</div>`;
     }
   }
 
