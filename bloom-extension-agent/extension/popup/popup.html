@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>BLOOM - Middlesex University</title>
+    <link rel="stylesheet" href="popup.css" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="logo-container">
+          <h1 class="logo-text">BLOOM</h1>
+          <span class="logo-subtitle">Middlesex University Assistant</span>
+        </div>
+      </div>
+
+      <div class="main-content">
+        <!-- Tab Navigation -->
+        <div class="bloom-tabs">
+          <button class="bloom-tab active" data-tab="documents">
+            Documents
+          </button>
+          <button class="bloom-tab" data-tab="scraper">Moodle Scraper</button>
+        </div>
+
+        <!-- Documents Tab Content -->
+        <div id="documents-screen" class="tab-content active">
+          <h2>Upload Documents</h2>
+          <p>Select course materials to upload for analysis</p>
+
+          <div class="upload-area" id="drop-area">
+            <div class="upload-icon">📄</div>
+            <p>Drag files here or</p>
+            <button id="select-files-btn" class="bloom-btn">
+              Select Files
+            </button>
+            <input
+              type="file"
+              id="file-input"
+              accept=".pdf,.docx"
+              multiple
+              style="display: none"
+            />
+            <p class="upload-note">Supports PDF and Word documents</p>
+          </div>
+
+          <div id="file-list" class="file-list"></div>
+
+          <div class="upload-actions">
+            <button id="upload-all-btn" class="bloom-btn" disabled>
+              Upload All
+            </button>
+            <button id="open-chat-btn" class="bloom-btn bloom-secondary-btn">
+              Open Chat Panel
+            </button>
+          </div>
+        </div>
+
+        <!-- Scraper Tab Content -->
+        <div id="scraper-screen" class="tab-content">
+          <div id="scraper-states-container">
+            <!-- Not on Moodle page state -->
+            <div id="not-moodle-state" class="scraper-state">
+              <div class="empty-state">
+                <div class="empty-icon">🔎</div>
+                <p>Not on a Moodle Course Page</p>
+                <p class="empty-subtitle">
+                  Navigate to a Middlesex Moodle course page to scrape content
+                </p>
+                <div class="info-box">
+                  <p>
+                    Example: https://mdx.mrooms.net/course/view.php?id=41059
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ready to scrape state -->
+            <div id="ready-state" class="scraper-state hidden">
+              <h2>Moodle Course Detected</h2>
+              <div class="module-info">
+                <div class="module-detail">
+                  <strong>Module:</strong> <span id="module-code"></span>
+                </div>
+                <div class="module-detail">
+                  <strong>Title:</strong> <span id="module-name"></span>
+                </div>
+              </div>
+              <p class="scraper-description">
+                Scraping will download PDFs and DOCXs from this Moodle page and
+                make them available in BLOOM.
+              </p>
+              <button id="start-scraping-btn" class="bloom-btn">
+                Start Scraping
+              </button>
+            </div>
+
+            <!-- Processing state -->
+            <div id="processing-state" class="scraper-state hidden">
+              <div class="processing-animation">
+                <div class="spinner"></div>
+              </div>
+              <h2>Processing Course Materials</h2>
+              <p id="processing-status">Analyzing your documents...</p>
+              <div id="processing-progress" class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+              </div>
+              <div class="progress-details">
+                <div>Found: <span id="files-found">0</span> files</div>
+                <div>
+                  Downloaded: <span id="files-downloaded">0</span> files
+                </div>
+              </div>
+            </div>
+
+            <!-- Complete state -->
+            <div id="complete-state" class="scraper-state hidden">
+              <div class="result-container">
+                <div class="result-icon success">✓</div>
+                <h2>Scraping Complete</h2>
+                <div class="result-details">
+                  <p>Module: <span id="result-module-code"></span></p>
+                  <p>Files: <span id="result-files-count"></span></p>
+                </div>
+                <div class="result-actions">
+                  <button id="view-documents-btn" class="bloom-btn">
+                    View Documents
+                  </button>
+                  <button
+                    id="open-chat-after-scrape-btn"
+                    class="bloom-btn bloom-secondary-btn"
+                  >
+                    Open Chat Panel
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Error state -->
+            <div id="error-state" class="scraper-state hidden">
+              <div class="result-container">
+                <div class="result-icon error">✗</div>
+                <h2>Scraping Failed</h2>
+                <p id="error-message" class="error-message">
+                  An error occurred while scraping the page.
+                </p>
+                <button id="retry-btn" class="bloom-btn">Try Again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Processing screen (Original code, kept for compatibility) -->
+        <div id="processing-screen" class="processing-screen hidden">
+          <div class="processing-animation">
+            <div class="spinner"></div>
+          </div>
+          <h2>Processing Documents</h2>
+          <p id="processing-status">Analyzing your documents...</p>
+          <div id="processing-progress" class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div id="status" class="status"></div>
+        <button id="open-panel-btn" class="bloom-btn bloom-small-btn">
+          Open Side Panel
+        </button>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
