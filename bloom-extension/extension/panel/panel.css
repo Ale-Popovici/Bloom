@@ -798,3 +798,44 @@
   border-color: #9146ff;
   color: #9146ff;
 }
+
+/* Add these styles to both panel.css and content.css */
+
+/* Markdown Table Styles with Horizontal Scrolling */
+.bloom-md-table-container {
+    width: 100%;
+    overflow-x: auto;
+    margin: 10px 0;
+    border: 1px solid #eee;
+    border-radius: 4px;
+  }
+  
+  .bloom-md-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9em;
+    background-color: white;
+    min-width: 300px; /* Ensures table doesn't shrink too much */
+  }
+  
+  .bloom-md-table th,
+  .bloom-md-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+  
+  .bloom-md-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+  }
+  
+  .bloom-md-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+  
+  .bloom-md-table tr:hover {
+    background-color: #f2f2f2;
+  }

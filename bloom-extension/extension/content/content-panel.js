@@ -62,10 +62,7 @@ function escapeHTML(text) {
     .replace(/'/g, "&#039;");
 }
 
-/*
- * Markdown parser function with citation footnotes
- * plus the existing logic for code blocks, bold, italic, lists, etc.
- */
+// Complete parseMarkdown function with table support for content-panel.js
 function parseMarkdown(text) {
   if (!text) return "";
 
@@ -99,7 +96,47 @@ function parseMarkdown(text) {
   text = text.replace(/^#\s+(.*?)$/gm, "<h1>$1</h1>");
 
   // ----------------------------------------------------------------
-  // 3) Continue with your existing Markdown transformations
+  // 3) Handle tables with scrollable container
+  // ----------------------------------------------------------------
+  text = text.replace(
+    /^\|(.+)\|\s*\n\|[-:\s|]+\|\s*\n((^\|.+\|\s*\n)+)/gm,
+    function (match, headerRow, bodyRows) {
+      // Process the header row
+      const headers = headerRow
+        .split("|")
+        .map((cell) => cell.trim())
+        .filter((cell) => cell !== "");
+
+      // Create the HTML header row with container for scrolling
+      let tableHTML =
+        '<div class="bloom-md-table-container"><table class="bloom-md-table"><thead><tr>';
+      headers.forEach((header) => {
+        tableHTML += `<th>${header}</th>`;
+      });
+      tableHTML += "</tr></thead><tbody>";
+
+      // Process body rows
+      const rows = bodyRows.trim().split("\n");
+      rows.forEach((row) => {
+        const cells = row
+          .split("|")
+          .map((cell) => cell.trim())
+          .filter((cell) => cell !== "");
+
+        tableHTML += "<tr>";
+        cells.forEach((cell) => {
+          tableHTML += `<td>${cell}</td>`;
+        });
+        tableHTML += "</tr>";
+      });
+
+      tableHTML += "</tbody></table></div>";
+      return tableHTML;
+    }
+  );
+
+  // ----------------------------------------------------------------
+  // 4) Continue with your existing Markdown transformations
   // ----------------------------------------------------------------
 
   // Handle code blocks with triple backticks
@@ -125,7 +162,7 @@ function parseMarkdown(text) {
   );
 
   // ----------------------------------------------------------------
-  // 4) Handle lists more carefully to allow partial content
+  // 5) Handle lists more carefully to allow partial content
   //    (Unordered lists first)
   // ----------------------------------------------------------------
   let lines = text.split("\n");
@@ -158,7 +195,7 @@ function parseMarkdown(text) {
   text = lines.filter((line) => line !== "").join("\n");
 
   // ----------------------------------------------------------------
-  // 5) Ordered lists
+  // 6) Ordered lists
   // ----------------------------------------------------------------
   lines = text.split("\n");
   inList = false;
@@ -187,7 +224,7 @@ function parseMarkdown(text) {
   text = lines.filter((line) => line !== "").join("\n");
 
   // ----------------------------------------------------------------
-  // 6) Handle paragraphs
+  // 7) Handle paragraphs
   // ----------------------------------------------------------------
   let paragraphs = text.split(/\n\n+/);
   if (paragraphs.length > 1) {
@@ -198,7 +235,7 @@ function parseMarkdown(text) {
   }
 
   // ----------------------------------------------------------------
-  // 7) Insert footnotes at the bottom if any citations were found
+  // 8) Insert footnotes at the bottom if any citations were found
   // ----------------------------------------------------------------
   let footnotesList = "";
   if (citations.length > 0) {

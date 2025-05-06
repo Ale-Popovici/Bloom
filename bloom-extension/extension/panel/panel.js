@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/'/g, "&#039;");
   }
 
-  // Markdown parser function with citation footnotes
+  // Complete parseMarkdown function with table support for panel.js
   function parseMarkdown(text) {
     if (!text) return "";
 
@@ -106,6 +106,44 @@ document.addEventListener("DOMContentLoaded", function () {
     text = text.replace(/^###\s+(.*?)$/gm, "<h3>$1</h3>");
     text = text.replace(/^##\s+(.*?)$/gm, "<h2>$1</h2>");
     text = text.replace(/^#\s+(.*?)$/gm, "<h1>$1</h1>");
+
+    // Handle markdown tables - NOW WITH SCROLLABLE CONTAINER
+    text = text.replace(
+      /^\|(.+)\|\s*\n\|[-:\s|]+\|\s*\n((^\|.+\|\s*\n)+)/gm,
+      function (match, headerRow, bodyRows) {
+        // Process the header row
+        const headers = headerRow
+          .split("|")
+          .map((cell) => cell.trim())
+          .filter((cell) => cell !== "");
+
+        // Create the HTML header row with container for scrolling
+        let tableHTML =
+          '<div class="bloom-md-table-container"><table class="bloom-md-table"><thead><tr>';
+        headers.forEach((header) => {
+          tableHTML += `<th>${header}</th>`;
+        });
+        tableHTML += "</tr></thead><tbody>";
+
+        // Process body rows
+        const rows = bodyRows.trim().split("\n");
+        rows.forEach((row) => {
+          const cells = row
+            .split("|")
+            .map((cell) => cell.trim())
+            .filter((cell) => cell !== "");
+
+          tableHTML += "<tr>";
+          cells.forEach((cell) => {
+            tableHTML += `<td>${cell}</td>`;
+          });
+          tableHTML += "</tr>";
+        });
+
+        tableHTML += "</tbody></table></div>";
+        return tableHTML;
+      }
+    );
 
     // Process standard markdown
     text = text.replace(/```([\s\S]*?)```/g, function (match, code) {
